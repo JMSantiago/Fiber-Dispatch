@@ -121,3 +121,37 @@ end; $$;
 revoke all on function public.devis_to_production() from public, anon, authenticated;
 create trigger devis_production after insert or update on public.devis
 for each row execute function public.devis_to_production();
+
+-- Achats : fournisseurs et bons de commande (séparés des devis DO, historique propre)
+create table public.fournisseurs (
+  id text primary key, nom text not null, data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), updated_by text, deleted_at timestamptz
+);
+create table public.bons_commande (
+  id text primary key, num text not null default '', status text not null default 'brouillon',
+  fournisseur text not null default '', affaire text not null default '', total_ht numeric(12,2) not null default 0, data jsonb not null,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), updated_by text, deleted_at timestamptz
+);
+create index bons_commande_updated_idx on public.bons_commande (updated_at desc);
+create table public.bons_commande_historique (
+  id bigint generated always as identity primary key, bc_id text not null, num text, action text not null, auteur text,
+  status text, total_ht numeric(12,2), data jsonb, created_at timestamptz not null default now()
+);
+create index bons_commande_historique_bc_idx on public.bons_commande_historique (bc_id, id desc);
+-- log_bon_commande() : même logique que log_devis() (création, modification regroupée sur 10 min, statut, suppression, restauration)
+create trigger bons_commande_log after insert or update on public.bons_commande for each row execute function public.log_bon_commande();
+alter table public.fournisseurs enable row level security;
+alter table public.bons_commande enable row level security;
+alter table public.bons_commande_historique enable row level security;
+revoke all on public.fournisseurs, public.bons_commande, public.bons_commande_historique from anon;
+create policy fournisseurs_team_select on public.fournisseurs for select to authenticated using ((select public.is_team()));
+create policy fournisseurs_team_insert on public.fournisseurs for insert to authenticated with check ((select public.is_team()));
+create policy fournisseurs_team_update on public.fournisseurs for update to authenticated using ((select public.is_team())) with check ((select public.is_team()));
+create policy bc_team_select on public.bons_commande for select to authenticated using ((select public.is_team()));
+create policy bc_team_insert on public.bons_commande for insert to authenticated with check ((select public.is_team()));
+create policy bc_team_update on public.bons_commande for update to authenticated using ((select public.is_team())) with check ((select public.is_team()));
+create policy bc_historique_team_select on public.bons_commande_historique for select to authenticated using ((select public.is_team()));
+revoke delete on public.fournisseurs, public.bons_commande from authenticated;
+revoke insert, update, delete on public.bons_commande_historique from authenticated;
+alter publication supabase_realtime add table public.bons_commande;
+alter publication supabase_realtime add table public.fournisseurs;

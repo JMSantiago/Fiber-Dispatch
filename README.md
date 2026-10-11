@@ -52,6 +52,15 @@ Onglet **Fil de l'eau**, reprise du fichier Excel « FIL DE L'EAU AUDIT-DEVIS »
 
 Le PDF « DO » d'un brouillon le passe automatiquement en « Envoyé – en attente » avec la date du jour.
 
+## Bons de commande
+
+Onglet **Bons de commande**, séparé des devis DO (tables `bons_commande` et `fournisseurs`, historique propre) :
+
+- **Bon de commande** : fournisseur (adresse et contact repris automatiquement), réf. de l'offre fournisseur, affaire / chantier, devis DO lié (facultatif), livraison (notre adresse mémorisée, chantier ou enlèvement en agence), articles avec prix « pour 1 / 100 / 1000 » (les « /C » de Sonepar ou Rexel), PDF avec logo. Télécharger le PDF d'un brouillon le passe en « Commandé ».
+- **Liste des bons** : filtres fournisseur, statut, mois ; export Excel ; versions et corbeille.
+- **Fournisseurs** : créés ou complétés automatiquement à l'enregistrement d'un bon. Les articles déjà commandés sont proposés dans le panneau de droite des bons suivants.
+- Dans **Production**, le montant des bons liés au devis s'affiche sous le prix d'achat.
+
 ## Gratuité et limites
 
 GitHub Pages et l'offre gratuite de Supabase suffisent. Supabase met en pause un projet gratuit qui a très peu d'activité sur 7 jours ; quelques utilisations par jour suffisent à l'éviter. Un projet en pause se relance depuis le tableau de bord Supabase (*Resume project*) pendant 90 jours, avec ses données. Les sauvegardes de la base ne sont pas téléchargeables sur l'offre gratuite : utilisez *Société → Sauvegarde* dans l'application pour garder une copie des devis.

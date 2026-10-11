@@ -123,6 +123,18 @@ textarea { resize: vertical; }
 .st-refuse { background: var(--bad-soft); color: var(--bad); }
 .hist-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 16px 8px}.hist-head p{margin:0;font-size:13px}
 .st-erreur { background: var(--surface-2); color: var(--bad); border: 1px solid var(--bad-soft); }
+/* Bons de commande */
+.st-commande { background: var(--warn-soft); color: var(--warn); }
+.st-partiel { background: var(--accent-soft); color: var(--accent); }
+.st-recu { background: var(--ok-soft); color: var(--ok); }
+.st-annule { background: var(--bad-soft); color: var(--bad); }
+.grid2.tight { gap: 8px; }
+table.lines.bc-lines { min-width: 860px; }
+table.lines.bc-lines .c-un { width: 86px; } table.lines.bc-lines .c-pour { width: 74px; } table.lines.bc-lines .c-qt { width: 64px; }
+table.lines.bc-lines select { padding: 5px 4px; }
+.liv-hint { font-size: 12px; margin: 0; }
+.warn-txt { color: var(--warn); font-weight: 600; font-size: 13px; }
+.item .price small { font-weight: 500; color: var(--muted); }
 
 /* Lines table */
 .lines-wrap { overflow-x: auto; }
@@ -308,6 +320,7 @@ td .fact-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
     <button class="tab" role="tab" data-view="devis" aria-selected="true">Devis</button>
     <button class="tab" role="tab" data-view="liste" aria-selected="false">Liste des devis</button>
     <button class="tab" role="tab" data-view="suivi" aria-selected="false" id="tabSuivi" hidden>Fil de l'eau</button>
+    <button class="tab" role="tab" data-view="achats" aria-selected="false" id="tabAchats" hidden>Bons de commande</button>
     <button class="tab" role="tab" data-view="histo" aria-selected="false" id="tabHisto" hidden>Historique</button>
     <button class="tab" role="tab" data-view="bpu" aria-selected="false">BPU &amp; DO</button>
     <button class="tab" role="tab" data-view="societe" aria-selected="false">Société</button>
@@ -543,6 +556,146 @@ td .fact-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
   </section>
   <datalist id="techList"></datalist>
 
+  <!-- ============ BONS DE COMMANDE (achats) ============ -->
+  <section class="view" id="view-achats" hidden>
+    <div class="toolbar">
+      <h1>Bons de commande</h1>
+      <div class="seg" role="group" aria-label="Onglets des achats">
+        <button type="button" data-ac="edit" aria-pressed="true">Bon de commande</button>
+        <button type="button" data-ac="liste" aria-pressed="false">Liste des bons</button>
+        <button type="button" data-ac="fourn" aria-pressed="false">Fournisseurs</button>
+      </div>
+    </div>
+
+    <div id="ac-edit">
+      <div class="workspace">
+        <div class="editor">
+          <div class="panel">
+            <div class="doc-head">
+              <div class="doc-num" id="bcNum">Nouveau bon de commande</div>
+              <select id="b-status" aria-label="Statut du bon de commande" style="width:auto">
+                <option value="brouillon">Brouillon</option><option value="commande">Commandé</option><option value="partiel">Livré en partie</option><option value="recu">Livré</option><option value="annule">Annulé</option>
+              </select>
+              <span class="save-state" id="bcSaveState"></span>
+              <div class="doc-actions">
+                <button class="btn" id="bcNew" type="button">Nouveau</button>
+                <button class="btn" id="bcDup" type="button">Dupliquer</button>
+                <button class="btn primary" id="bcSave" type="button">Enregistrer</button>
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn accent" id="bcPdf" type="button">PDF bon de commande</button>
+              <button class="btn" id="bcVersions" type="button">Versions</button>
+            </div>
+          </div>
+
+          <div class="grid2">
+            <div class="panel">
+              <h2>Fournisseur <small>mémorisé automatiquement</small></h2>
+              <div class="stack">
+                <label class="field"><span>Fournisseur</span><input type="text" id="b-fourn" list="fournList" placeholder="Sonepar, Rexel, Azenn… ou un nouveau nom" autocomplete="off"></label>
+                <label class="field"><span>Agence</span><input type="text" id="b-agence"></label>
+                <label class="field"><span>Adresse</span><input type="text" id="b-adresse"></label>
+                <label class="field"><span>Code postal et ville</span><input type="text" id="b-cpVille"></label>
+                <div class="grid2 tight">
+                  <label class="field"><span>Contact</span><input type="text" id="b-contact"></label>
+                  <label class="field"><span>Téléphone</span><input type="text" id="b-tel"></label>
+                </div>
+                <div class="grid2 tight">
+                  <label class="field"><span>E-mail</span><input type="text" id="b-email" inputmode="email"></label>
+                  <label class="field"><span>Notre n° client chez eux</span><input type="text" id="b-numClient"></label>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Commande <small>affaire et livraison</small></h2>
+              <div class="stack">
+                <div class="grid2 tight">
+                  <label class="field"><span>Date de commande</span><input type="date" id="b-date"></label>
+                  <label class="field"><span>Réf. offre / devis fournisseur</span><input type="text" id="b-refOffre" placeholder="ex. DV46032450"></label>
+                </div>
+                <label class="field"><span>Affaire / chantier</span><input type="text" id="b-affaire" placeholder="ex. UNIVI FAIENCERIE"></label>
+                <label class="field"><span>Devis DO lié <small class="muted">(facultatif)</small></span><input type="text" id="b-devis" list="bcDevisList" placeholder="N° de devis ou nom du client" autocomplete="off"></label>
+                <label class="field"><span>Livraison</span><select id="b-livMode"><option value="societe">Livraison à notre adresse</option><option value="chantier">Livraison sur le chantier</option><option value="enlevement">Enlèvement en agence</option></select></label>
+                <p class="muted liv-hint" id="b-livHint"></p>
+                <div class="stack" id="b-livAddr">
+                  <label class="field"><span>Nom / site de livraison</span><input type="text" id="b-livNom"></label>
+                  <label class="field"><span>Adresse de livraison</span><input type="text" id="b-livAdresse"></label>
+                  <div class="grid2 tight">
+                    <label class="field"><span>Code postal et ville</span><input type="text" id="b-livCpVille"></label>
+                    <label class="field"><span>Contact sur place</span><input type="text" id="b-livContact"></label>
+                  </div>
+                </div>
+                <div class="grid2 tight">
+                  <label class="field"><span>Livraison souhaitée le</span><input type="date" id="b-dateLiv"></label>
+                  <label class="field"><span>TVA (%)</span><input type="number" id="b-tva" min="0" step="0.1"></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Articles commandés <small id="bcLinesCount"></small></h2>
+            <div class="lines-wrap">
+              <table class="lines bc-lines">
+                <thead><tr><th class="c-ord"></th><th class="c-ref">Réf. fournisseur</th><th>Désignation</th><th class="c-qt r">Qté</th><th class="c-un">Unité</th><th class="c-pu r">PU net HT</th><th class="c-pour">Prix pour</th><th class="c-mt r">Montant HT</th><th class="c-act"></th></tr></thead>
+                <tbody id="bcLines"></tbody>
+              </table>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn sm" id="bcAddLine" type="button">+ Ligne libre</button>
+              <button class="btn sm" id="bcAddText" type="button">+ Commentaire</button>
+              <span class="muted" style="font-size:12px">« Prix pour 100 » : prix au cent, comme les « /C » des offres Sonepar ou Rexel.</span>
+            </div>
+            <label class="field" style="margin-top:12px"><span>Remarques imprimées sur le bon</span><textarea id="b-notes" rows="2" placeholder="ex. Livraison avant 10 h, appeler le contact sur place"></textarea></label>
+            <dl class="totals">
+              <dt>Total HT</dt><dd class="money" id="bcHT">0,00 €</dd>
+              <dt id="bcTvaLabel">TVA 20 %</dt><dd class="money" id="bcTVA">0,00 €</dd>
+              <dt>Total TTC</dt><dd class="money ttc" id="bcTTC">0,00 €</dd>
+            </dl>
+          </div>
+        </div>
+
+        <aside class="catalog" id="bcCatalog" aria-label="Articles du fournisseur">
+          <div class="cat-head">
+            <h2>Articles <small class="muted" id="bcCatFourn" style="font-family:var(--f-body);font-weight:500;font-size:12px"></small>
+              <button class="btn sm close-cat" id="bcCloseCat" type="button">Fermer</button></h2>
+            <input type="search" id="bcCatSearch" placeholder="Chercher une référence, un article…" aria-label="Chercher un article">
+            <p class="muted" style="font-size:12px;margin:0">Prix des offres enregistrées et articles des bons déjà passés chez ce fournisseur. Cliquez pour ajouter.</p>
+          </div>
+          <div class="cat-body" id="bcCatBody"></div>
+        </aside>
+      </div>
+      <button class="btn primary fab" id="bcFab" type="button">Articles</button>
+    </div>
+
+    <div id="ac-liste" hidden>
+      <div class="toolbar sv-filters">
+        <input type="search" id="bclSearch" placeholder="Chercher un n°, un fournisseur, une affaire, un article…" style="max-width:320px">
+        <select id="bclFourn" style="width:auto;max-width:220px" aria-label="Fournisseur"></select>
+        <select id="bclStatus" style="width:auto" aria-label="Statut">
+          <option value="">Tous les statuts</option><option value="brouillon">Brouillon</option><option value="commande">Commandé</option><option value="partiel">Livré en partie</option><option value="recu">Livré</option><option value="annule">Annulé</option><option value="__trash">Corbeille</option>
+        </select>
+        <select id="bclMois" style="width:auto" aria-label="Mois"></select>
+        <button class="btn" id="bclExport" type="button">Exporter (Excel)</button>
+        <button class="btn primary" id="bclNew" type="button" style="margin-left:auto">Nouveau bon de commande</button>
+      </div>
+      <div class="fact-bar"><div class="fact-sum" id="bclSum"></div></div>
+      <div class="table-wrap" id="bclWrap"></div>
+      <p class="muted sv-help">Les bons de commande sont enregistrés à part des devis DO, avec leur propre historique (bouton « Versions »). Un bon supprimé va dans la corbeille et peut être restauré.</p>
+    </div>
+
+    <div id="ac-fourn" hidden>
+      <div class="toolbar">
+        <input type="search" id="bcfSearch" placeholder="Chercher un fournisseur, une ville, un contact…" style="max-width:320px">
+        <button class="btn primary" id="bcfNew" type="button" style="margin-left:auto">Nouveau fournisseur</button>
+      </div>
+      <div class="table-wrap" id="bcfWrap"></div>
+      <p class="muted sv-help">Un fournisseur saisi dans un bon de commande est ajouté ici à l'enregistrement, avec son adresse et son contact ; une adresse complétée plus tard met sa fiche à jour. Ses articles commandés sont proposés automatiquement dans les bons suivants.</p>
+    </div>
+    <datalist id="fournList"></datalist><datalist id="bcDevisList"></datalist><datalist id="bcUnites"></datalist>
+  </section>
+
   <!-- ============ HISTORIQUE ============ -->
   <section class="view" id="view-histo" hidden>
     <div class="toolbar">
@@ -756,9 +909,9 @@ const ArtifactStore = (() => {
 /* ---------------- storage: Supabase (GitHub Pages version, shared access code) ---------------- */
 function makeSupaStore(cfg) {
   const sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "crm-devis-auth" } });
-  const subs = { devis: [], grids: [], config: [], production: [] };
-  const cache = { devis: [], config: {}, production: [] };
-  let refreshProdT;
+  const subs = { devis: [], grids: [], config: [], production: [], bcs: [] };
+  const cache = { devis: [], config: {}, production: [], bcs: [], fourn: [], bcNums: [] };
+  let refreshProdT, refreshBcT;
   let author = lsGet("crm:author", "");
   const q = async (p) => { const { data, error } = await p; if (error) throw error; return data; };
   const isAuthErr = (e) => e && (e.status === 401 || /jwt|token|auth/i.test(e.message || "") || e.code === "PGRST301");
@@ -795,7 +948,7 @@ function makeSupaStore(cfg) {
   }
   return {
     sb,
-    features: { history: true, trash: true, catalogImport: true, suivi: true },
+    features: { history: true, trash: true, catalogImport: true, suivi: true, achats: true },
     get mode() { return "supabase"; },
     get author() { return author; },
     setAuthor(n) { author = n; lsSet("crm:author", n); },
@@ -920,6 +1073,54 @@ function makeSupaStore(cfg) {
         (subs.production || []).forEach((f) => f(cache.production)); return true;
       } catch (e) { return fail(e, "Enregistrement de la facturation"); }
     },
+    // ---- achats : bons de commande et fournisseurs ----
+    onBcs(cb) {
+      subs.bcs.push(cb);
+      loadBcs().catch((e) => fail(e, "Chargement des bons de commande"));
+      sb.channel("achats-live").on("postgres_changes", { event: "*", schema: "public", table: "bons_commande" }, refreshBcSoon)
+        .on("postgres_changes", { event: "*", schema: "public", table: "fournisseurs" }, refreshBcSoon).subscribe();
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshBcSoon(); });
+    },
+    async saveBc(b) {
+      try {
+        await q(sb.from("bons_commande").upsert({ id: b.id, num: b.num || "", status: b.status || "brouillon", fournisseur: (b.fournisseur && b.fournisseur.nom) || "", affaire: b.affaire || "",
+          total_ht: bcTotals(b).ht, data: b, created_at: new Date(b.createdAt || Date.now()).toISOString(), updated_at: now(), updated_by: author || null }));
+        const i = cache.bcs.findIndex((x) => x.id === b.id); const row = { ...b, updatedBy: author };
+        if (i >= 0) cache.bcs[i] = row; else { cache.bcs.unshift(row); cache.bcNums.push(b.num || ""); }
+        notifyBcs(); return true;
+      } catch (e) { return fail(e, "Enregistrement du bon de commande"); }
+    },
+    async deleteBc(id) {
+      try { await q(sb.from("bons_commande").update({ deleted_at: now(), updated_by: author || null }).eq("id", id)); cache.bcs = cache.bcs.filter((x) => x.id !== id); notifyBcs(); return true; }
+      catch (e) { return fail(e, "Suppression du bon de commande"); }
+    },
+    async restoreBc(id) {
+      try { await q(sb.from("bons_commande").update({ deleted_at: null, updated_by: author || null }).eq("id", id)); await loadBcs(); return true; }
+      catch (e) { return fail(e, "Restauration du bon de commande"); }
+    },
+    async listBcTrash() {
+      try { const rows = await q(sb.from("bons_commande").select("id,data,updated_by,deleted_at").not("deleted_at", "is", null).order("deleted_at", { ascending: false }).limit(500)); return rows.map((r) => ({ ...r.data, id: r.id, deletedAt: r.deleted_at, updatedBy: r.updated_by })); }
+      catch (e) { fail(e, "Lecture de la corbeille"); return []; }
+    },
+    async bcHistory(id) {
+      try { return await q(sb.from("bons_commande_historique").select("id,num,action,auteur,status,total_ht,created_at").eq("bc_id", id).order("id", { ascending: false }).limit(300)); }
+      catch (e) { fail(e, "Lecture des versions"); return []; }
+    },
+    async bcVersion(hid) {
+      try { const rows = await q(sb.from("bons_commande_historique").select("data").eq("id", hid).limit(1)); return rows[0] ? rows[0].data : null; }
+      catch (e) { fail(e, "Lecture de la version"); return null; }
+    },
+    async saveFournisseur(f) {
+      try {
+        await q(sb.from("fournisseurs").upsert({ id: f.id, nom: f.nom, data: f, updated_at: now(), updated_by: author || null, deleted_at: null }));
+        const i = cache.fourn.findIndex((x) => x.id === f.id); if (i >= 0) cache.fourn[i] = { ...f }; else cache.fourn.push({ ...f });
+        notifyBcs(); return true;
+      } catch (e) { return fail(e, "Enregistrement du fournisseur"); }
+    },
+    async deleteFournisseur(id) {
+      try { await q(sb.from("fournisseurs").update({ deleted_at: now(), updated_by: author || null }).eq("id", id)); cache.fourn = cache.fourn.filter((x) => x.id !== id); notifyBcs(); return true; }
+      catch (e) { return fail(e, "Suppression du fournisseur"); }
+    },
     async deleteProduction(id) {
       try { await q(sb.from("production").update({ deleted_at: now(), updated_by: author || null }).eq("id", id)); cache.production = cache.production.filter((x) => x.id !== id); (subs.production || []).forEach((f) => f(cache.production)); return true; }
       catch (e) { return fail(e, "Suppression de l'intervention"); }
@@ -930,6 +1131,18 @@ function makeSupaStore(cfg) {
     cache.production = rows.map((r) => ({ ...r.data, id: r.id, devisId: r.devis_id, statut: r.statut, dateIntervention: r.date_intervention || "", updatedBy: r.updated_by }));
     (subs.production || []).forEach((f) => f(cache.production));
   }
+  async function loadBcs() {
+    const [rows, fr] = await Promise.all([
+      q(sb.from("bons_commande").select("id,num,data,updated_by,deleted_at").order("updated_at", { ascending: false }).limit(3000)),
+      q(sb.from("fournisseurs").select("id,nom,data").is("deleted_at", null).order("nom").limit(1000))
+    ]);
+    cache.bcNums = rows.map((r) => r.num || "");
+    cache.bcs = rows.filter((r) => !r.deleted_at).map((r) => ({ ...r.data, id: r.id, updatedBy: r.updated_by }));
+    cache.fourn = fr.map((r) => ({ ...r.data, id: r.id, nom: r.nom }));
+    notifyBcs();
+  }
+  function notifyBcs() { subs.bcs.forEach((f) => f(cache.bcs, cache.fourn, cache.bcNums)); }
+  function refreshBcSoon() { clearTimeout(refreshBcT); refreshBcT = setTimeout(() => loadBcs().catch(() => {}), 500); }
   function refreshProdSoon() { clearTimeout(refreshProdT); refreshProdT = setTimeout(() => loadProduction().catch(() => {}), 500); }
 }
 
@@ -1765,6 +1978,11 @@ function svProdRows() {
     .sort((a, b) => (!a.dateIntervention) - (!b.dateIntervention) || (b.dateIntervention || "").localeCompare(a.dateIntervention || ""));
 }
 let armedFact = false;
+function bcHint(p) { // bons de commande liés au devis de l'intervention (matériel acheté)
+  if (!p.devisId || typeof BC === "undefined" || !BC.list.length) return "";
+  const bs = BC.list.filter((b) => b.devisId === p.devisId && b.status !== "annule"); if (!bs.length) return "";
+  return `<div class="fact-date" title="${esc(bs.map((b) => b.num + " · " + b.fournisseur.nom).join("\n"))}">matériel BC : ${money(sumBy(bs, (b) => bcTotals(b).ht))}</div>`;
+}
 function renderFactBar(P) {
   const nonReal = P.filter((p) => p.statut !== "REALISE").length, deja = P.filter(estFacture).length, aMarquer = P.filter((p) => !estFacture(p)).length;
   const dof = $("svpDo").value, mois = $("svpMois").value;
@@ -1791,7 +2009,7 @@ function renderSvProd() {
       <td><input class="w-s" data-pf="ticket" value="${esc(p.ticket || "")}"></td>
       <td><input type="date" class="w-m" data-pf="dateIntervention" value="${esc(p.dateIntervention || "")}"></td>
       <td class="r"><input class="w-n" inputmode="decimal" data-pf="prixVente" value="${p.prixVente === null || p.prixVente === undefined || p.prixVente === "" ? "" : esc(fmtNum(p.prixVente))}"></td>
-      <td class="r"><input class="w-n" inputmode="decimal" data-pf="prixAchat" value="${p.prixAchat === null || p.prixAchat === undefined || p.prixAchat === "" ? "" : esc(fmtNum(p.prixAchat))}"></td>
+      <td class="r"><input class="w-n" inputmode="decimal" data-pf="prixAchat" value="${p.prixAchat === null || p.prixAchat === undefined || p.prixAchat === "" ? "" : esc(fmtNum(p.prixAchat))}">${bcHint(p)}</td>
       <td class="r money ${m !== null && m < 0 ? "neg" : ""}">${m === null ? "" : money(m)}</td>
       <td><input class="w-m" data-pf="technicien" list="techList" value="${esc(p.technicien || "")}"></td>
       <td><select class="w-m" data-pf="statut">${PROD_STATUTS.map((s) => `<option value="${s}" ${s === p.statut ? "selected" : ""}>${PROD_LABEL[s]}</option>`).join("")}</select></td>
@@ -1995,12 +2213,520 @@ async function svMarkFacturees() {
   renderSuivi();
 }
 
+/* ---------------- BONS DE COMMANDE (achats chez les fournisseurs) ---------------- */
+/* Enregistrés à part des devis DO (tables bons_commande / fournisseurs), avec leur propre historique. */
+const BC_STATUS = { brouillon: "Brouillon", commande: "Commandé", partiel: "Livré en partie", recu: "Livré", annule: "Annulé" };
+const BC_UNITES = ["UN", "PCS", "MTR", "ML", "LOT", "ENS", "BTE", "ROU", "KG", "H"];
+const FOURN_FIELDS = ["nom", "agence", "adresse", "cpVille", "contact", "tel", "email", "numClient"];
+const BC = { cur: null, dirty: false, list: [], fourn: [], nums: [], view: "edit", cfg: {}, ready: false };
+let bcAutosaveT = null, bcArmedDel = null, bcArmedFourn = null, bcHistCtx = null, bcArmedRestore = null, bcTrash = [];
+
+const bcLineTotal = (l) => (l.kind === "text" ? 0 : round2((Number(l.qt) || 0) * (Number(l.pu) || 0) / (Number(l.pour) || 1)));
+function bcTotals(b) { const ht = round2((b.lines || []).reduce((s, l) => s + bcLineTotal(l), 0)); const tva = round2(ht * (Number(b.tva) || 0) / 100); return { ht, tva, ttc: round2(ht + tva) }; }
+const fournSlug = (nom) => "f-" + (norm(nom).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid());
+const fournByName = (nom) => { const n = norm(String(nom || "").trim()); return n ? BC.fourn.find((f) => norm(f.nom) === n) : null; };
+const fournById = (id) => BC.fourn.find((f) => f.id === id) || null;
+const puTxt = (pu, pour) => (pu === null || pu === undefined ? "" : money(pu) + (Number(pour) > 1 ? ` /${pour}` : ""));
+
+function bcLivDefaut() {
+  const l = BC.cfg.livraison || {};
+  return { nom: l.nom || S.company.name || "", adresse: l.adresse ?? S.company.addr1 ?? "", cpVille: l.cpVille ?? S.company.addr2 ?? "", contact: l.contact || "" };
+}
+function blankBc() {
+  return {
+    id: null, num: "", status: "brouillon", createdAt: null, updatedAt: null, date: todayISO(),
+    fournisseurId: "", fournisseur: { nom: "", agence: "", adresse: "", cpVille: "", contact: "", tel: "", email: "", numClient: "" },
+    refOffre: "", affaire: "", devisId: "", devisNum: "",
+    livraison: { mode: "societe", ...bcLivDefaut() }, dateLivraison: "",
+    tva: Number(S.company.tva) || 20, notes: "", auteur: "", lines: []
+  };
+}
+function normalizeBc(b) {
+  const z = blankBc();
+  const out = { ...z, ...b, fournisseur: { ...z.fournisseur, ...(b.fournisseur || {}) }, livraison: { ...z.livraison, ...(b.livraison || {}) } };
+  out.lines = (b.lines || []).map((l) => ({ id: l.id || uid(), kind: l.kind || "item", ref: l.ref || "", des: l.des || "", qt: l.qt ?? 1, unite: l.unite || "", pu: l.pu ?? null, pour: Number(l.pour) || 1 }));
+  return out;
+}
+function bcNextNumber() {
+  const ym = todayISO().slice(2, 7).replace("-", ""); const re = new RegExp("^BC-" + ym + "-(\\d+)$");
+  let max = 0; [...BC.nums, ...BC.list.map((b) => b.num)].forEach((n) => { const m = re.exec(n || ""); if (m) max = Math.max(max, +m[1]); });
+  return `BC-${ym}-${String(max + 1).padStart(3, "0")}`;
+}
+
+/* ---- éditeur ---- */
+const BF = { // champ → chemin dans le bon de commande
+  "b-agence": ["fournisseur", "agence"], "b-adresse": ["fournisseur", "adresse"], "b-cpVille": ["fournisseur", "cpVille"], "b-contact": ["fournisseur", "contact"],
+  "b-tel": ["fournisseur", "tel"], "b-email": ["fournisseur", "email"], "b-numClient": ["fournisseur", "numClient"],
+  "b-date": ["date"], "b-refOffre": ["refOffre"], "b-affaire": ["affaire"], "b-dateLiv": ["dateLivraison"], "b-notes": ["notes"],
+  "b-livNom": ["livraison", "nom"], "b-livAdresse": ["livraison", "adresse"], "b-livCpVille": ["livraison", "cpVille"], "b-livContact": ["livraison", "contact"]
+};
+const bcGet = (path) => path.reduce((o, k) => (o ? o[k] : ""), BC.cur);
+const bcSet = (path, v) => { const o = path.length > 1 ? BC.cur[path[0]] : BC.cur; o[path[path.length - 1]] = v; };
+const devisLabel = (d) => `${d.num} · ${d.doName || "?"} → ${(d.client && d.client.name) || ""}`.trim();
+
+function loadBcForm() {
+  const b = BC.cur;
+  $("b-fourn").value = b.fournisseur.nom || "";
+  Object.entries(BF).forEach(([id, path]) => { $(id).value = bcGet(path) || ""; });
+  $("b-status").value = b.status || "brouillon"; $("b-tva").value = b.tva; $("b-livMode").value = b.livraison.mode || "societe";
+  const d = b.devisId ? S.devis.find((x) => x.id === b.devisId) : null;
+  $("b-devis").value = d ? devisLabel(d) : (b.devisNum || "");
+  $("b-livAddr").hidden = b.livraison.mode === "enlevement";
+  $("b-livHint").textContent = b.livraison.mode === "enlevement" ? `Le bon indiquera un enlèvement à l'agence ${b.fournisseur.agence || b.fournisseur.nom || "du fournisseur"}.` : b.livraison.mode === "societe" ? "Adresse mémorisée : modifiez-la une fois, elle sera reprise sur les prochains bons." : "";
+  renderBcHead(); renderBcLines(); renderBcCatalog();
+}
+function renderBcHead() {
+  const b = BC.cur; if (!b) return;
+  $("bcNum").innerHTML = b.num ? `Bon de commande <em>${esc(b.num)}</em>` : "Nouveau bon de commande";
+  const st = $("bcSaveState");
+  if (S.readOnly) { st.textContent = "Lecture seule"; st.className = "save-state"; }
+  else if (!BC.ready) { st.textContent = "Connexion à l'enregistrement…"; st.className = "save-state"; }
+  else if (BC.dirty) { st.textContent = b.id ? "Modifications non enregistrées" : "Pas encore enregistré"; st.className = "save-state dirty"; }
+  else if (b.updatedAt) { st.textContent = "Enregistré " + new Date(b.updatedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }); st.className = "save-state"; }
+  else st.textContent = "";
+  $("bcSave").disabled = S.readOnly || !BC.ready; $("bcVersions").disabled = !b.id;
+}
+function bcMarkDirty() {
+  BC.dirty = true; renderBcHead(); clearTimeout(bcAutosaveT);
+  if (BC.cur.id && !S.readOnly) bcAutosaveT = setTimeout(() => bcSave(true), 2500);
+}
+function bcChooseFourn(text) {
+  const t = String(text || "").trim(); const b = BC.cur; const f = fournByName(t);
+  // même fournisseur (ex. second « change » en quittant le champ) : ne rien redessiner, sinon le clic en cours est perdu
+  if (f ? b.fournisseurId === f.id && b.fournisseur.nom === f.nom : b.fournisseur.nom === t && b.fournisseurId === (t ? fournSlug(t) : "")) { if (f) $("b-fourn").value = f.nom; return; }
+  if (f) {
+    b.fournisseurId = f.id; FOURN_FIELDS.forEach((k) => { b.fournisseur[k] = f[k] || ""; });
+    toast(`${f.nom} : adresse et contact repris${bcArticles(f.id).length ? ` · ${bcArticles(f.id).length} articles connus` : ""}`);
+  } else {
+    const wasKnown = !!fournById(b.fournisseurId);
+    b.fournisseurId = t ? fournSlug(t) : ""; b.fournisseur.nom = t;
+    if (wasKnown) FOURN_FIELDS.filter((k) => k !== "nom").forEach((k) => { b.fournisseur[k] = ""; });
+    if (t) toast("Nouveau fournisseur : complétez son adresse, il sera enregistré avec le bon de commande");
+  }
+  loadBcForm(); bcMarkDirty();
+  if (!f && t) $("b-adresse").focus();
+}
+function bcChooseDevis(text) {
+  const t = String(text || "").trim(); const b = BC.cur;
+  if (!t) { b.devisId = ""; b.devisNum = ""; bcMarkDirty(); return; }
+  const num = t.split(" · ")[0].trim();
+  const d = S.devis.find((x) => x.num === num) || S.devis.find((x) => norm(devisLabel(x)).includes(norm(t)));
+  if (d && d.id === b.devisId) return;
+  if (!d) { b.devisId = ""; b.devisNum = t; bcMarkDirty(); toast("Devis introuvable : le texte est gardé comme référence"); return; }
+  b.devisId = d.id; b.devisNum = d.num;
+  const c = d.client || {};
+  if (!b.affaire.trim()) b.affaire = [c.name, c.cpVille].filter(Boolean).join(" – ") || d.reference || "";
+  if (b.livraison.mode === "chantier" && !b.livraison.adresse) b.livraison = { mode: "chantier", nom: c.name || "", adresse: c.address || "", cpVille: c.cpVille || "", contact: b.livraison.contact || "" };
+  loadBcForm(); bcMarkDirty(); toast(`Bon lié au devis ${d.num}`);
+}
+function bcSetLivMode(mode) {
+  const b = BC.cur; const prev = b.livraison;
+  if (mode === "societe") b.livraison = { mode, ...bcLivDefaut() };
+  else if (mode === "chantier") {
+    const d = b.devisId ? S.devis.find((x) => x.id === b.devisId) : null; const c = (d && d.client) || {};
+    b.livraison = prev.mode === "chantier" ? prev : { mode, nom: c.name || b.affaire || "", adresse: c.address || "", cpVille: c.cpVille || "", contact: "" };
+  } else b.livraison = { mode, nom: "", adresse: "", cpVille: "", contact: "" };
+  loadBcForm(); bcMarkDirty();
+}
+
+/* ---- lignes ---- */
+function bcLineRow(l, i, n) {
+  const isText = l.kind === "text";
+  return `<tr data-i="${i}" class="${isText ? "is-text" : ""}">
+    <td class="ord"><button class="icon-btn" data-act="up" ${i === 0 ? "disabled" : ""} aria-label="Monter la ligne">▲</button><button class="icon-btn" data-act="down" ${i === n - 1 ? "disabled" : ""} aria-label="Descendre la ligne">▼</button></td>
+    <td>${isText ? "" : `<input type="text" class="mono" data-f="ref" value="${esc(l.ref)}" aria-label="Référence fournisseur">`}</td>
+    <td${isText ? ` colspan="5"` : ""}><textarea data-f="des" rows="1" aria-label="${isText ? "Commentaire" : "Désignation"}" placeholder="${isText ? "Commentaire imprimé sans prix" : ""}">${esc(l.des)}</textarea></td>
+    ${isText ? "" : `<td class="r"><input type="text" inputmode="decimal" class="num" data-f="qt" value="${esc(qtyStr(l.qt))}" style="text-align:right" aria-label="Quantité"></td>
+    <td><input type="text" data-f="unite" list="bcUnites" value="${esc(l.unite)}" aria-label="Unité" placeholder="UN"></td>
+    <td class="r"><input type="text" inputmode="decimal" class="num" data-f="pu" value="${l.pu === null || l.pu === undefined ? "" : esc(fmtNum(l.pu))}" style="text-align:right" aria-label="Prix unitaire net HT"></td>
+    <td><select data-f="pour" aria-label="Prix pour"><option value="1" ${l.pour == 1 ? "selected" : ""}>1</option><option value="100" ${l.pour == 100 ? "selected" : ""}>100</option><option value="1000" ${l.pour == 1000 ? "selected" : ""}>1000</option></select></td>`}
+    <td class="r mt money" data-mt>${isText ? "" : money(bcLineTotal(l))}</td>
+    <td class="r"><button class="icon-btn" data-act="del" aria-label="Supprimer la ligne">✕</button></td>
+  </tr>`;
+}
+function renderBcLines() {
+  const L = BC.cur.lines; const body = $("bcLines");
+  body.innerHTML = L.length ? L.map((l, i) => bcLineRow(l, i, L.length)).join("")
+    : `<tr><td colspan="9" class="empty-lines">Aucun article. Choisissez le fournisseur puis cliquez sur un article à droite, ou ajoutez une ligne libre.</td></tr>`;
+  body.querySelectorAll("textarea").forEach(autoGrow);
+  const n = L.filter((l) => l.kind !== "text").length; $("bcLinesCount").textContent = n ? `${n} ligne${n > 1 ? "s" : ""}` : "";
+  renderBcTotals();
+}
+function renderBcTotals() {
+  const t = bcTotals(BC.cur);
+  $("bcHT").textContent = money(t.ht); $("bcTVA").textContent = money(t.tva); $("bcTTC").textContent = money(t.ttc);
+  $("bcTvaLabel").textContent = `TVA ${String(BC.cur.tva).replace(".", ",")} %`;
+}
+function bcAddArticle(a, fournId) {
+  const b = BC.cur;
+  if (!b.fournisseur.nom && fournId) { const f = fournById(fournId); if (f) { b.fournisseurId = f.id; FOURN_FIELDS.forEach((k) => { b.fournisseur[k] = f[k] || ""; }); loadBcForm(); } }
+  b.lines.push({ id: uid(), kind: "item", ref: a.ref || "", des: a.des || "", qt: 1, unite: a.unite || "", pu: a.pu ?? null, pour: Number(a.pour) || 1 });
+  renderBcLines(); bcMarkDirty(); toast(`Ajouté : ${a.ref || a.des.slice(0, 40)}`);
+}
+
+/* ---- articles connus d'un fournisseur : offres enregistrées + lignes des bons déjà passés ---- */
+function bcArticles(fournId) {
+  const f = fournById(fournId); const seen = new Map();
+  const put = (a) => { const k = norm(a.ref || a.des).trim(); if (!k) return; const old = seen.get(k); if (!old || (a.date || "") >= (old.date || "")) seen.set(k, a); };
+  ((f && f.articles) || []).forEach((a) => put({ ...a }));
+  BC.list.filter((b) => b.fournisseurId === fournId && b.status !== "annule").forEach((b) => (b.lines || []).forEach((l) => {
+    if (l.kind === "text" || !(l.ref || l.des)) return;
+    put({ ref: l.ref, des: l.des, unite: l.unite, pu: l.pu, pour: l.pour, date: b.date || "", source: `${b.num} du ${frDate(b.date)}` });
+  }));
+  return [...seen.values()].sort((a, b) => (a.ref || a.des).localeCompare(b.ref || b.des, "fr"));
+}
+function renderBcCatalog() {
+  if (!BC.cur) return;
+  const words = norm($("bcCatSearch").value.trim()).split(/\s+/).filter(Boolean);
+  const cur = BC.cur.fournisseurId && fournById(BC.cur.fournisseurId);
+  const groups = cur ? [cur] : BC.fourn;
+  $("bcCatFourn").textContent = cur ? "· " + cur.nom : BC.cur.fournisseur.nom ? "· " + BC.cur.fournisseur.nom + " (nouveau)" : "· tous les fournisseurs";
+  let html = "", total = 0;
+  groups.forEach((f) => {
+    const hits = bcArticles(f.id).filter((a) => !words.length || words.every((w) => norm(`${a.ref} ${a.des} ${a.source}`).includes(w)));
+    if (!hits.length) return; total += hits.length;
+    html += `<details class="cat-grid" open><summary><b>${esc(f.nom)}</b><span class="count">${hits.length}</span></summary>` + hits.map((a, i) =>
+      `<button type="button" class="item" data-fid="${esc(f.id)}" data-k="${i}"><span class="ref">${esc(a.ref || "—")}</span><span class="price">${esc(puTxt(a.pu, a.pour))}${a.unite ? ` <small>${esc(a.unite)}</small>` : ""}</span><span class="des">${esc(a.des)}</span>${a.source ? `<span class="det">${esc(a.source)}</span>` : ""}</button>`).join("") + `</details>`;
+  });
+  $("bcCatBody").innerHTML = html || `<div class="cat-empty">${words.length ? "Aucun article ne correspond." : BC.cur.fournisseur.nom ? "Pas encore d'article connu pour ce fournisseur : ajoutez des lignes libres, elles seront proposées ici pour les prochains bons." : "Aucun article enregistré."}</div>`;
+  $("bcFab").textContent = `Articles (${total})`;
+}
+
+/* ---- enregistrement ---- */
+async function bcSave(silent) {
+  if (S.readOnly || !BC.ready) return false;
+  clearTimeout(bcAutosaveT);
+  const b = BC.cur;
+  if (!b.fournisseur.nom.trim()) { if (!silent) { toast("Choisissez ou saisissez un fournisseur"); $("b-fourn").focus(); } return false; }
+  if (!b.id) { b.id = uid(); b.num = bcNextNumber(); b.createdAt = Date.now(); }
+  b.updatedAt = Date.now(); b.auteur = b.auteur || Store.author || "";
+  const known = fournById(b.fournisseurId) || fournByName(b.fournisseur.nom);
+  b.fournisseurId = known ? known.id : fournSlug(b.fournisseur.nom);
+  const data = JSON.parse(JSON.stringify(b)); delete data.updatedBy;
+  if (!(await Store.saveBc(data))) return false;
+  BC.dirty = false; renderBcHead();
+  // fournisseur : créé ou complété automatiquement (les champs vides ne remplacent rien)
+  const f = known || { id: b.fournisseurId, nom: b.fournisseur.nom, articles: [], notes: "" };
+  const merged = { ...f }; let changed = !known;
+  FOURN_FIELDS.forEach((k) => { const v = String(b.fournisseur[k] || "").trim(); if (v && v !== (f[k] || "")) { merged[k] = v; changed = true; } });
+  if (changed) { const ok = await Store.saveFournisseur(merged); if (ok && !known && !silent) toast(`Bon ${b.num} enregistré · fournisseur ${merged.nom} ajouté`); else if (!silent) toast(`Bon ${b.num} enregistré`); }
+  else if (!silent) toast(`Bon ${b.num} enregistré`);
+  // adresse de livraison « chez nous » mémorisée
+  if (b.livraison.mode === "societe") {
+    const cur = BC.cfg.livraison || {}; const nv = { nom: b.livraison.nom, adresse: b.livraison.adresse, cpVille: b.livraison.cpVille, contact: b.livraison.contact };
+    if (["nom", "adresse", "cpVille", "contact"].some((k) => (nv[k] || "") !== (cur[k] ?? bcLivDefaut()[k] ?? ""))) { BC.cfg = { ...BC.cfg, livraison: nv }; await Store.saveConfig("achats", BC.cfg); }
+  }
+  lsSet("bbcrm:lastBc", b.id);
+  return true;
+}
+async function bcOpen(id) {
+  const b = BC.list.find((x) => x.id === id); if (!b) return;
+  if (BC.cur && BC.cur.id && BC.cur.id !== id && BC.dirty) await bcSave(true);
+  BC.cur = normalizeBc(JSON.parse(JSON.stringify(b))); BC.dirty = false; lsSet("bbcrm:lastBc", id);
+  achatsGo("edit"); loadBcForm();
+}
+function bcNew(fourn) {
+  BC.cur = blankBc(); BC.dirty = false;
+  if (fourn) { BC.cur.fournisseurId = fourn.id; FOURN_FIELDS.forEach((k) => { BC.cur.fournisseur[k] = fourn[k] || ""; }); }
+  achatsGo("edit"); loadBcForm(); (fourn ? $("b-affaire") : $("b-fourn")).focus();
+}
+function bcDuplicate(src) {
+  const b = normalizeBc(JSON.parse(JSON.stringify(src)));
+  Object.assign(b, { id: null, num: "", status: "brouillon", createdAt: null, updatedAt: null, date: todayISO(), refOffre: "", dateLivraison: "", auteur: "" });
+  b.lines.forEach((l) => { l.id = uid(); });
+  BC.cur = b; BC.dirty = true; achatsGo("edit"); loadBcForm(); toast("Copie créée : enregistrez-la pour lui donner un numéro");
+}
+
+/* ---- PDF ---- */
+function buildBcPdfDoc(b, company, logo) {
+  const C = { teal: "#044E67", line: "#2E4E4E", text: "#1B1B1B" };
+  const t = bcTotals(b); const f = b.fournisseur; const liv = b.livraison;
+  const m = (n) => fmtNum(n) + " €"; const fd = (iso) => frDate(iso);
+  const addrBlock = (title, lines) => ({ stack: [{ text: title, color: C.teal, decoration: "underline", fontSize: 9, margin: [0, 0, 0, 6] }].concat(lines.filter(Boolean).map((x, i) => ({ text: x, fontSize: i === 0 ? 9.5 : 9, bold: i === 0 }))) });
+  const fournLines = [f.nom, f.agence && norm(f.agence) !== norm(f.nom) ? f.agence : "", f.adresse, f.cpVille, f.contact ? "À l'attention de " + f.contact : "", [f.tel, f.email].filter(Boolean).join(" · ")];
+  const livLines = liv.mode === "enlevement" ? ["Enlèvement en agence", f.agence || f.nom, f.adresse, f.cpVille] : [liv.nom, liv.adresse, liv.cpVille, liv.contact ? "Contact sur place : " + liv.contact : ""];
+  const lab = (x) => ({ text: x, bold: true, color: C.teal, fontSize: 9 }); const val = (x) => ({ text: x || "", fontSize: 9 });
+  const info = [[lab("N° DE COMMANDE"), val(b.num)], [lab("DATE DE COMMANDE"), val(fd(b.date))]];
+  if (b.refOffre) info.push([lab("VOTRE OFFRE / DEVIS N°"), val(b.refOffre)]);
+  if (f.numClient) info.push([lab("NOTRE N° CLIENT"), val(f.numClient)]);
+  if (b.affaire) info.push([lab("AFFAIRE / CHANTIER"), val(b.affaire)]);
+  if (b.dateLivraison) info.push([lab(liv.mode === "enlevement" ? "ENLÈVEMENT SOUHAITÉ LE" : "LIVRAISON SOUHAITÉE LE"), val(fd(b.dateLivraison))]);
+  if (b.auteur) info.push([lab("COMMANDÉ PAR"), val(b.auteur)]);
+  const th = (x, al) => ({ text: x, bold: true, color: C.teal, fontSize: 8.5, alignment: al || "center", margin: [0, 3, 0, 3] });
+  const body = [[th("RÉFÉRENCE"), th("DÉSIGNATION"), th("QTÉ"), th("UNITÉ"), th("PU NET H.T."), th("MONTANT H.T.")]];
+  (b.lines || []).forEach((l) => {
+    if (l.kind === "text") body.push([{ text: "" }, { text: l.des || "", fontSize: 8.5, italics: true, colSpan: 5 }, {}, {}, {}, {}]);
+    else body.push([{ text: l.ref || "", fontSize: 8, alignment: "center" }, { text: l.des || "", fontSize: 8.5 }, { text: qtyStr(l.qt), fontSize: 8.5, alignment: "center" },
+      { text: l.unite || "", fontSize: 8, alignment: "center" }, { text: puTxt(l.pu, l.pour), fontSize: 8.5, alignment: "right" }, { text: m(bcLineTotal(l)), fontSize: 8.5, alignment: "right" }]);
+  });
+  if (body.length === 1) body.push([{ text: "" }, { text: "" }, { text: "" }, { text: "" }, { text: "" }, { text: "" }]);
+  const grid = { hLineColor: () => C.line, vLineColor: () => C.line, hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingTop: () => 3, paddingBottom: () => 3 };
+  const headLeft = { stack: [{ text: company.name || "", bold: true, fontSize: 15, color: C.teal }, { text: company.addr1 || "", fontSize: 11, color: C.teal, margin: [0, 6, 0, 0] }, { text: company.addr2 || "", fontSize: 11, color: C.teal }] };
+  const head = logo ? { columns: [headLeft, { image: logo, fit: [78, 78], alignment: "right", width: 90 }], columnGap: 10 } : headLeft;
+  const remarks = [b.notes, `Merci de rappeler le n° de commande ${b.num} sur l'accusé de réception, le bon de livraison et la facture.`,
+    `Facturation : ${[company.name, company.addr1, company.addr2].filter(Boolean).join(", ")}.`].filter((x) => String(x || "").trim());
+  return {
+    pageSize: "A4", pageMargins: [36, 36, 36, 60],
+    info: { title: "Bon de commande " + (b.num || ""), author: company.name || "", subject: f.nom || "" },
+    defaultStyle: { font: "Roboto", fontSize: 9, color: C.text },
+    footer: (page, pages) => ({ margin: [36, 6, 36, 0], stack: [
+      { text: company.foot1 || "", fontSize: 7, alignment: "center" }, { text: company.foot2 || "", fontSize: 7, alignment: "center", margin: [0, 2, 0, 0] },
+      { text: pages > 1 ? "Page " + page + " / " + pages : "", fontSize: 7, alignment: "right", color: "#666666", margin: [0, 2, 0, 0] }] }),
+    content: [
+      head,
+      { columns: [addrBlock("FOURNISSEUR :", fournLines), addrBlock(liv.mode === "enlevement" ? "ENLÈVEMENT :" : "Adresse de LIVRAISON :", livLines)], columnGap: 40, margin: [0, 18, 0, 0] },
+      { text: "BON DE COMMANDE", bold: true, fontSize: 22, color: C.teal, margin: [0, 18, 0, 6] },
+      { table: { widths: [150, "*"], body: info }, layout: grid },
+      { table: { headerRows: 1, dontBreakRows: true, widths: [72, "*", 34, 36, 72, 72], body }, layout: grid, margin: [0, 12, 0, 0] },
+      { columns: [{ width: "*", text: "" }, { width: "auto", table: { widths: [86, 86, 86], body: [[th("TOTAL H.T."), th("TVA " + String(b.tva).replace(".", ",") + " %"), th("TOTAL T.T.C.")], [
+        { text: m(t.ht), alignment: "right" }, { text: m(t.tva), alignment: "right" }, { text: m(t.ttc), alignment: "right", bold: true }]] }, layout: grid }], margin: [0, 12, 0, 0], unbreakable: true },
+      { table: { widths: ["*"], body: [[{ stack: remarks.map((r) => ({ text: r, fontSize: 8.5, color: C.teal, bold: true, margin: [0, 1, 0, 1] })), margin: [8, 5, 8, 5] }]] }, layout: grid, margin: [0, 14, 0, 0], unbreakable: true },
+      { columns: [{ width: "*", text: "" }, { width: 220, stack: [{ text: "Bon pour commande", bold: true, color: C.teal, fontSize: 10, alignment: "center" }, { text: "Date, nom, signature et cachet", fontSize: 8.5, alignment: "center", color: "#555555", margin: [0, 2, 0, 0] }], margin: [0, 12, 0, 50] }] }
+    ]
+  };
+}
+function bcPdfName(b) {
+  return ["BC", b.num, b.fournisseur.nom, b.affaire].map((x) => String(x || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean).join(" - ") + ".pdf";
+}
+async function bcPdf(other) {
+  if (!window.pdfMake || !pdfMake.createPdf) { toast("Le module PDF ne s'est pas chargé. Vérifiez la connexion internet puis rechargez la page."); return; }
+  let marked = false;
+  if (!other) {
+    if (!BC.cur.fournisseur.nom.trim()) { toast("Choisissez d'abord le fournisseur"); $("b-fourn").focus(); return; }
+    if (BC.cur.status === "brouillon" && BC.cur.lines.some((l) => l.kind !== "text") && !S.readOnly && BC.ready) { BC.cur.status = "commande"; $("b-status").value = "commande"; BC.dirty = true; marked = true; }
+    if ((BC.dirty || !BC.cur.id) && !S.readOnly && BC.ready) { if (!(await bcSave(true))) return; }
+  }
+  const b = other ? normalizeBc(other) : BC.cur;
+  const doc = buildBcPdfDoc(b, S.company, S.company.logo || DEFAULT_LOGO); const name = bcPdfName(b);
+  pdfMake.createPdf(doc).getBlob(async (blob) => { if (await saveFile(name, blob)) toast("PDF prêt : " + name + (marked ? " · bon passé en « Commandé »" : "")); });
+}
+
+/* ---- liste des bons de commande ---- */
+function bcListRows() {
+  const q = norm($("bclSearch").value), f = $("bclFourn").value, st = $("bclStatus").value, mois = $("bclMois").value;
+  return BC.list.filter((b) => (!f || b.fournisseurId === f) && (!st || b.status === st) && (!mois || (b.date || "").startsWith(mois))
+    && (!q || norm([b.num, b.fournisseur && b.fournisseur.nom, b.affaire, b.refOffre, b.devisNum, b.auteur, b.notes, ...(b.lines || []).map((l) => l.ref + " " + l.des)].join(" ")).includes(q)))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.num || "").localeCompare(a.num || ""));
+}
+async function renderBcList() {
+  const keep = (sel, html) => { const v = sel.value; sel.innerHTML = html; sel.value = v; if (sel.selectedIndex < 0) sel.selectedIndex = 0; };
+  keep($("bclFourn"), `<option value="">Tous les fournisseurs</option>` + BC.fourn.map((f) => `<option value="${esc(f.id)}">${esc(f.nom)}</option>`).join(""));
+  const months = Array.from(new Set(BC.list.map((b) => (b.date || "").slice(0, 7)).filter(Boolean))).sort().reverse();
+  keep($("bclMois"), `<option value="">Tous les mois</option>` + months.map((m) => `<option value="${m}">${esc(moisLabel(m))}</option>`).join(""));
+  if ($("bclStatus").value === "__trash") {
+    bcTrash = await Store.listBcTrash(); const q = norm($("bclSearch").value);
+    const rows = bcTrash.filter((b) => !q || norm([b.num, b.fournisseur && b.fournisseur.nom, b.affaire].join(" ")).includes(q));
+    $("bclSum").innerHTML = `<b>${rows.length}</b> bon${rows.length > 1 ? "s" : ""} dans la corbeille`; $("bclExport").disabled = true;
+    $("bclWrap").innerHTML = rows.length ? `<table class="data"><thead><tr><th>N°</th><th>Supprimé le</th><th>Par</th><th>Fournisseur</th><th>Affaire</th><th class="r">Total HT</th><th class="r">Actions</th></tr></thead><tbody>` +
+      rows.map((b) => `<tr data-id="${esc(b.id)}"><td class="mono">${esc(b.num)}</td><td class="num">${fmtDT(b.deletedAt)}</td><td>${esc(b.updatedBy || "")}</td><td>${esc(b.fournisseur && b.fournisseur.nom)}</td><td>${esc(b.affaire)}</td><td class="r money">${money(bcTotals(b).ht)}</td>
+        <td class="r" style="white-space:nowrap"><button class="btn sm" data-a="hist">Versions</button> <button class="btn sm primary" data-a="restore" ${S.readOnly ? "disabled" : ""}>Restaurer</button></td></tr>`).join("") + `</tbody></table>`
+      : `<div class="empty-state"><b>Corbeille vide</b>Les bons de commande supprimés apparaissent ici et peuvent être restaurés.</div>`;
+    return;
+  }
+  const rows = bcListRows(); const tot = sumBy(rows.filter((b) => b.status !== "annule"), (b) => bcTotals(b).ht);
+  const nAnn = rows.filter((b) => b.status === "annule").length;
+  $("bclSum").innerHTML = `<b>${rows.length}</b> bon${rows.length > 1 ? "s" : ""} de commande · <b>${money(tot)}</b> HT${nAnn ? ` <span class="muted">(hors ${nAnn} annulé${nAnn > 1 ? "s" : ""})</span>` : ""}`;
+  $("bclExport").disabled = !rows.length;
+  if (!BC.list.length) { $("bclWrap").innerHTML = `<div class="empty-state"><b>Aucun bon de commande pour l'instant</b>Créez-en un avec « Nouveau bon de commande » : il sera listé ici, séparé des devis DO.</div>`; return; }
+  if (!rows.length) { $("bclWrap").innerHTML = `<div class="empty-state"><b>Aucun bon ne correspond</b>Modifiez la recherche ou les filtres.</div>`; return; }
+  $("bclWrap").innerHTML = `<table class="data" style="min-width:980px"><thead><tr><th>N°</th><th>Date</th><th>Fournisseur</th><th>Affaire / chantier</th><th>Réf. offre</th><th>Devis DO</th><th class="r">Total HT</th><th>Statut</th><th class="r">Actions</th></tr></thead><tbody>` +
+    rows.map((b) => `<tr class="click" data-id="${esc(b.id)}" title="Ouvrir le bon de commande"><td class="mono">${esc(b.num)}</td><td class="num">${frDate(b.date)}${b.auteur ? `<div class="muted" style="font-size:12px">${esc(b.auteur)}</div>` : ""}</td><td>${esc(b.fournisseur && b.fournisseur.nom)}</td><td>${esc(b.affaire)}</td><td class="mono">${esc(b.refOffre)}</td>
+      <td>${b.devisId && S.devis.some((d) => d.id === b.devisId) ? `<button class="linkish mono" data-a="devis">${esc(b.devisNum)}</button>` : esc(b.devisNum || "")}</td>
+      <td class="r money">${money(bcTotals(b).ht)}</td><td><span class="status-chip st-${esc(b.status || "brouillon")}">${esc(BC_STATUS[b.status] || "Brouillon")}</span></td>
+      <td class="r" style="white-space:nowrap"><button class="btn sm" data-a="hist">Versions</button> <button class="btn sm" data-a="dup">Dupliquer</button> <button class="btn sm danger ${bcArmedDel === b.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${bcArmedDel === b.id ? "Confirmer" : "Supprimer"}</button></td></tr>`).join("") + `</tbody></table>`;
+}
+async function bcExportList() {
+  const rows = bcListRows(); if (!rows.length) return;
+  let X; try { X = await loadXlsx(); } catch (e) { toast("Impossible de charger le module Excel : vérifiez la connexion internet"); return; }
+  const recap = rows.map((b) => { const t = bcTotals(b); return [b.num, xlDate(b.date), b.fournisseur.nom, b.affaire, b.refOffre, b.devisNum || "", BC_STATUS[b.status] || b.status, xlMoney(t.ht), xlMoney(t.ttc), b.auteur || ""]; });
+  const det = []; rows.forEach((b) => (b.lines || []).filter((l) => l.kind !== "text").forEach((l) => det.push([b.num, xlDate(b.date), b.fournisseur.nom, b.affaire, l.ref, l.des, { t: "n", v: Number(l.qt) || 0 }, l.unite, xlMoney(l.pu), Number(l.pour) || 1, xlMoney(bcLineTotal(l))])));
+  const actifs = rows.filter((b) => b.status !== "annule");
+  const wb = X.utils.book_new();
+  X.utils.book_append_sheet(wb, xlSheet(X, ["N° BC", "Date", "Fournisseur", "Affaire / chantier", "Réf. offre", "Devis DO", "Statut", "Total HT", "Total TTC", "Commandé par"], recap,
+    ["Total (hors annulés)", "", "", "", "", "", `${actifs.length} bon${actifs.length > 1 ? "s" : ""}`, xlMoney(sumBy(actifs, (b) => bcTotals(b).ht)), xlMoney(sumBy(actifs, (b) => bcTotals(b).ttc)), ""], [14, 12, 22, 30, 16, 14, 14, 14, 14, 16]), "Bons de commande");
+  X.utils.book_append_sheet(wb, xlSheet(X, ["N° BC", "Date", "Fournisseur", "Affaire / chantier", "Référence", "Désignation", "Quantité", "Unité", "PU net HT", "Prix pour", "Montant HT"], det, null, [14, 12, 22, 28, 16, 56, 10, 8, 13, 9, 14]), "Détail articles");
+  const out = X.write(wb, { bookType: "xlsx", type: "array", compression: true });
+  const f = $("bclFourn").value ? fournById($("bclFourn").value) : null; const mois = $("bclMois").value;
+  const name = `Bons_de_commande_${f ? f.nom.replace(/[^A-Za-z0-9]+/g, "-") : "tous"}_${mois || todayISO()}.xlsx`;
+  if (await saveFile(name, new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))) toast(`${name} : ${rows.length} bon${rows.length > 1 ? "s" : ""}`);
+}
+
+/* ---- versions (historique propre aux bons de commande) ---- */
+async function openBcHistory(id, b) {
+  bcHistCtx = { id, b, rows: [] };
+  openModal(`Versions du bon ${b && b.num ? b.num : ""}`, `<div class="empty-state">Chargement…</div>`);
+  bcHistCtx.rows = await Store.bcHistory(id); renderBcHistory();
+}
+function renderBcHistory() {
+  const { rows, id } = bcHistCtx; const b = bcHistCtx.b || {}; const live = BC.list.some((x) => x.id === id);
+  $("modalBody").innerHTML = `<div class="hist-head"><p class="muted">${b.fournisseur ? esc(b.fournisseur.nom) + (b.affaire ? " · " + esc(b.affaire) : "") : live ? "" : "Ce bon est dans la corbeille : restaurez une version pour le récupérer."}</p>${live ? `<button class="btn primary sm" data-bv="open" type="button">Ouvrir le bon</button>` : ""}</div>` +
+    (rows.length ? `<div style="overflow-x:auto"><table class="data" style="min-width:620px"><thead><tr><th>Date</th><th>Par</th><th>Action</th><th>Statut</th><th class="r">Total HT</th><th class="r">Version</th></tr></thead><tbody>` +
+    rows.map((r, i) => `<tr data-h="${r.id}"><td class="num">${fmtDT(r.created_at)}</td><td>${esc(r.auteur || "—")}</td><td><span class="act act-${esc(r.action)}">${esc(ACT[r.action] || r.action)}</span></td><td>${r.status ? `<span class="status-chip st-${esc(r.status)}">${esc(BC_STATUS[r.status] || r.status)}</span>` : ""}</td><td class="r money">${r.total_ht !== null && r.total_ht !== undefined ? money(Number(r.total_ht)) : ""}</td>
+      <td class="r" style="white-space:nowrap"><button class="btn sm" data-bv="pdf">PDF</button> ${i === 0 ? `<span class="muted" style="font-size:12px">actuelle</span>` : `<button class="btn sm ${bcArmedRestore === r.id ? "danger armed" : ""}" data-bv="restore" ${S.readOnly ? "disabled" : ""}>${bcArmedRestore === r.id ? "Confirmer" : "Restaurer"}</button>`}</td></tr>`).join("") + `</tbody></table></div>`
+    : `<div class="empty-state"><b>Pas encore de version</b>L'historique démarre au premier enregistrement.</div>`);
+}
+
+/* ---- fournisseurs ---- */
+function renderFournList() {
+  const q = norm($("bcfSearch").value);
+  const rows = BC.fourn.filter((f) => !q || norm(FOURN_FIELDS.map((k) => f[k]).join(" ")).includes(q));
+  if (!BC.fourn.length) { $("bcfWrap").innerHTML = `<div class="empty-state"><b>Aucun fournisseur</b>Ils s'ajoutent automatiquement à l'enregistrement d'un bon de commande.</div>`; return; }
+  $("bcfWrap").innerHTML = rows.length ? `<table class="data" style="min-width:900px"><thead><tr><th>Fournisseur</th><th>Adresse</th><th>Contact</th><th>N° client</th><th class="r">Bons</th><th class="r">Commandé HT</th><th class="r">Articles</th><th class="r"></th></tr></thead><tbody>` +
+    rows.map((f) => { const bs = BC.list.filter((b) => b.fournisseurId === f.id && b.status !== "annule"); const missing = !f.adresse && !f.cpVille;
+      return `<tr class="click" data-fid="${esc(f.id)}" title="Modifier la fiche"><td><b>${esc(f.nom)}</b>${f.agence ? `<div class="muted" style="font-size:12px">${esc(f.agence)}</div>` : ""}</td>
+      <td>${missing ? `<span class="warn-txt">Adresse à compléter</span>` : `${esc(f.adresse)}<div class="muted" style="font-size:12px">${esc(f.cpVille)}</div>`}</td>
+      <td>${esc(f.contact)}<div class="muted" style="font-size:12px">${esc([f.tel, f.email].filter(Boolean).join(" · "))}</div></td><td class="mono">${esc(f.numClient)}</td>
+      <td class="r">${bs.length}</td><td class="r money">${money(sumBy(bs, (b) => bcTotals(b).ht))}</td><td class="r">${bcArticles(f.id).length}</td>
+      <td class="r" style="white-space:nowrap"><button class="btn sm primary" data-fa="bc">Nouveau bon</button></td></tr>`; }).join("") + `</tbody></table>`
+    : `<div class="empty-state"><b>Aucun fournisseur ne correspond</b>Modifiez la recherche.</div>`;
+}
+function openFournForm(f) {
+  const x = f || { id: "", nom: "", articles: [] };
+  const fld = (k, label, type) => `<label class="field"><span>${label}</span><input type="${type || "text"}" data-ff="${k}" value="${esc(x[k] || "")}" ${k === "nom" ? "required" : ""}></label>`;
+  openModal(f ? `Fournisseur ${f.nom}` : "Nouveau fournisseur", `<form id="fournForm" class="stack" style="padding:16px">
+    <div class="grid2 tight">${fld("nom", "Nom du fournisseur")}${fld("agence", "Agence")}</div>
+    ${fld("adresse", "Adresse")}${fld("cpVille", "Code postal et ville")}
+    <div class="grid2 tight">${fld("contact", "Contact")}${fld("tel", "Téléphone")}</div>
+    <div class="grid2 tight">${fld("email", "E-mail", "email")}${fld("numClient", "Notre n° client chez eux")}</div>
+    <label class="field"><span>Notes</span><textarea data-ff="notes" rows="2">${esc(x.notes || "")}</textarea></label>
+    ${f ? `<p class="muted" style="margin:0;font-size:12px">${bcArticles(f.id).length} article(s) connu(s) : offres enregistrées et lignes des bons déjà passés.</p>` : ""}
+    <div class="row"><button class="btn primary" type="submit" ${S.readOnly ? "disabled" : ""}>Enregistrer</button>${f ? `<button class="btn danger ${bcArmedFourn === f.id ? "armed" : ""}" type="button" id="fournDel" ${S.readOnly ? "disabled" : ""}>${bcArmedFourn === f.id ? "Confirmer la suppression" : "Supprimer"}</button>` : ""}</div>
+  </form>`);
+  const form = $("fournForm"); form.querySelector("[data-ff=nom]").focus();
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault(); const v = {}; form.querySelectorAll("[data-ff]").forEach((el) => { v[el.dataset.ff] = el.value.trim(); });
+    if (!v.nom) return; const other = fournByName(v.nom);
+    if (other && (!f || other.id !== f.id)) { toast(`${other.nom} existe déjà`); return; }
+    const rec = { ...(f || { articles: [] }), ...v, id: f ? f.id : fournSlug(v.nom) };
+    if (await Store.saveFournisseur(rec)) { closeModal(); toast(`Fournisseur ${rec.nom} enregistré`); renderAchats(); }
+  });
+  const del = $("fournDel");
+  if (del) del.addEventListener("click", async () => {
+    if (bcArmedFourn !== f.id) { bcArmedFourn = f.id; del.classList.add("armed"); del.textContent = "Confirmer la suppression"; setTimeout(() => { bcArmedFourn = null; }, 4000); return; }
+    bcArmedFourn = null; if (await Store.deleteFournisseur(f.id)) { closeModal(); toast(`Fournisseur ${f.nom} retiré (ses bons de commande restent)`); renderAchats(); }
+  });
+}
+
+/* ---- navigation ---- */
+function achatsGo(view) { BC.view = view; renderAchats(); }
+function renderAchats() {
+  if (!Store.features.achats || $("view-achats").hidden) return;
+  ["edit", "liste", "fourn"].forEach((v) => { $("ac-" + v).hidden = v !== BC.view; });
+  document.querySelectorAll("[data-ac]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.ac === BC.view)));
+  $("fournList").innerHTML = BC.fourn.map((f) => `<option value="${esc(f.nom)}"></option>`).join("");
+  $("bcDevisList").innerHTML = S.devis.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 300).map((d) => `<option value="${esc(devisLabel(d))}"></option>`).join("");
+  if (BC.view === "edit" && BC.cur) { renderBcHead(); renderBcCatalog(); }
+  if (BC.view === "liste") renderBcList();
+  if (BC.view === "fourn") renderFournList();
+}
+function bindAchats() {
+  $("bcUnites").innerHTML = BC_UNITES.map((u) => `<option value="${u}"></option>`).join("");
+  document.querySelectorAll("[data-ac]").forEach((b) => b.addEventListener("click", () => achatsGo(b.dataset.ac)));
+  Object.entries(BF).forEach(([id, path]) => $(id).addEventListener("input", (e) => { bcSet(path, e.target.value); bcMarkDirty(); if (id === "b-agence" || id === "b-adresse") renderBcCatalog(); }));
+  $("b-fourn").addEventListener("change", (e) => bcChooseFourn(e.target.value));
+  $("b-devis").addEventListener("change", (e) => bcChooseDevis(e.target.value));
+  $("b-livMode").addEventListener("change", (e) => bcSetLivMode(e.target.value));
+  $("b-status").addEventListener("change", (e) => { BC.cur.status = e.target.value; bcMarkDirty(); });
+  $("b-tva").addEventListener("input", (e) => { BC.cur.tva = parseNum(e.target.value) ?? 0; renderBcTotals(); bcMarkDirty(); });
+  const body = $("bcLines");
+  body.addEventListener("input", (e) => {
+    const tr = e.target.closest("tr[data-i]"); if (!tr) return; const l = BC.cur.lines[+tr.dataset.i]; const f = e.target.dataset.f; if (!f) return;
+    if (f === "des") { l.des = e.target.value; autoGrow(e.target); }
+    else if (f === "ref" || f === "unite") l[f] = e.target.value;
+    else if (f === "pu") l.pu = parseNum(e.target.value);
+    else if (f === "qt") l.qt = parseNum(e.target.value) ?? 0;
+    if (f === "pu" || f === "qt") { tr.querySelector("[data-mt]").textContent = money(bcLineTotal(l)); renderBcTotals(); }
+    bcMarkDirty();
+  });
+  body.addEventListener("change", (e) => {
+    if (e.target.dataset.f !== "pour") return; const tr = e.target.closest("tr[data-i]"); const l = BC.cur.lines[+tr.dataset.i];
+    l.pour = Number(e.target.value) || 1; tr.querySelector("[data-mt]").textContent = money(bcLineTotal(l)); renderBcTotals(); bcMarkDirty();
+  });
+  body.addEventListener("focusout", (e) => { const tr = e.target.closest("tr[data-i]"); if (!tr) return; const l = BC.cur.lines[+tr.dataset.i]; if (e.target.dataset.f === "pu" && l.pu !== null) e.target.value = fmtNum(l.pu); });
+  body.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]"); if (!b) return; const i = +b.closest("tr").dataset.i; const L = BC.cur.lines;
+    if (b.dataset.act === "del") L.splice(i, 1);
+    if (b.dataset.act === "up" && i > 0) [L[i - 1], L[i]] = [L[i], L[i - 1]];
+    if (b.dataset.act === "down" && i < L.length - 1) [L[i + 1], L[i]] = [L[i], L[i + 1]];
+    renderBcLines(); bcMarkDirty();
+  });
+  const lastField = (f) => { const rows = body.querySelectorAll("tr[data-i]"); const r = rows[rows.length - 1]; const el = r && r.querySelector(`[data-f="${f}"]`); if (el) el.focus(); };
+  $("bcAddLine").addEventListener("click", () => { BC.cur.lines.push({ id: uid(), kind: "item", ref: "", des: "", qt: 1, unite: "UN", pu: null, pour: 1 }); renderBcLines(); bcMarkDirty(); lastField("ref"); });
+  $("bcAddText").addEventListener("click", () => { BC.cur.lines.push({ id: uid(), kind: "text", ref: "", des: "", qt: 0, unite: "", pu: null, pour: 1 }); renderBcLines(); bcMarkDirty(); lastField("des"); });
+  $("bcCatBody").addEventListener("click", (e) => { const it = e.target.closest(".item[data-fid]"); if (!it) return; const words = norm($("bcCatSearch").value.trim()).split(/\s+/).filter(Boolean);
+    const list = bcArticles(it.dataset.fid).filter((a) => !words.length || words.every((w) => norm(`${a.ref} ${a.des} ${a.source}`).includes(w))); const a = list[+it.dataset.k]; if (a) bcAddArticle(a, it.dataset.fid); });
+  let t; $("bcCatSearch").addEventListener("input", () => { clearTimeout(t); t = setTimeout(renderBcCatalog, 120); });
+  $("bcFab").addEventListener("click", () => { $("bcCatalog").classList.add("open"); $("bcCatSearch").focus(); });
+  $("bcCloseCat").addEventListener("click", () => $("bcCatalog").classList.remove("open"));
+  $("bcNew").addEventListener("click", () => bcNew()); $("bclNew").addEventListener("click", () => bcNew());
+  $("bcDup").addEventListener("click", () => bcDuplicate(BC.cur));
+  $("bcSave").addEventListener("click", () => bcSave(false));
+  $("bcPdf").addEventListener("click", () => bcPdf());
+  $("bcVersions").addEventListener("click", () => { if (BC.cur.id) openBcHistory(BC.cur.id, BC.cur); });
+  // liste
+  $("bclSearch").addEventListener("input", () => renderBcList());
+  ["bclFourn", "bclStatus", "bclMois"].forEach((id) => $(id).addEventListener("change", () => renderBcList()));
+  $("bclExport").addEventListener("click", bcExportList);
+  $("bclWrap").addEventListener("click", async (e) => {
+    const tr = e.target.closest("tr[data-id]"); if (!tr) return; const id = tr.dataset.id; const a = e.target.closest("[data-a]");
+    const b = BC.list.find((x) => x.id === id) || bcTrash.find((x) => x.id === id);
+    if (!a) { if (tr.classList.contains("click")) bcOpen(id); return; }
+    if (a.dataset.a === "devis") { openDevis(b.devisId); return; }
+    if (a.dataset.a === "hist") openBcHistory(id, b);
+    if (a.dataset.a === "dup") bcDuplicate(b);
+    if (a.dataset.a === "restore") { if (await Store.restoreBc(id)) { toast(`Bon ${b.num} restauré`); renderBcList(); } }
+    if (a.dataset.a === "del") {
+      if (bcArmedDel !== id) { bcArmedDel = id; renderBcList(); setTimeout(() => { if (bcArmedDel === id) { bcArmedDel = null; renderBcList(); } }, 4000); return; }
+      bcArmedDel = null; if (await Store.deleteBc(id)) { toast(`Bon ${b.num} supprimé (récupérable dans la corbeille)`); if (BC.cur && BC.cur.id === id) { BC.cur = blankBc(); BC.dirty = false; loadBcForm(); } }
+    }
+  });
+  // versions
+  $("modalBody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-bv]"); if (!btn || !bcHistCtx) return;
+    if (btn.dataset.bv === "open") { closeModal(); bcOpen(bcHistCtx.id); return; }
+    const hid = +btn.closest("tr").dataset.h; const data = await Store.bcVersion(hid); if (!data) return;
+    if (btn.dataset.bv === "pdf") { bcPdf({ ...data, id: bcHistCtx.id }); return; }
+    if (btn.dataset.bv === "restore") {
+      if (bcArmedRestore !== hid) { bcArmedRestore = hid; renderBcHistory(); setTimeout(() => { if (bcArmedRestore === hid) { bcArmedRestore = null; if (!$("modal").hidden && bcHistCtx) renderBcHistory(); } }, 4000); return; }
+      bcArmedRestore = null; const cur = BC.list.find((x) => x.id === bcHistCtx.id);
+      if (!cur) { if (!(await Store.restoreBc(bcHistCtx.id))) return; }
+      BC.cur = normalizeBc({ ...data, id: bcHistCtx.id, num: data.num || (cur && cur.num) || "", createdAt: (cur && cur.createdAt) || data.createdAt });
+      BC.dirty = true; await bcSave(true); closeModal(); achatsGo("edit"); loadBcForm(); toast(`Version du ${fmtDT(data.updatedAt)} restaurée`);
+    }
+  });
+  $("modalClose").addEventListener("click", () => { bcHistCtx = null; });
+  // fournisseurs
+  $("bcfSearch").addEventListener("input", renderFournList);
+  $("bcfNew").addEventListener("click", () => openFournForm(null));
+  $("bcfWrap").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-fid]"); if (!tr) return; const f = fournById(tr.dataset.fid); if (!f) return;
+    if (e.target.closest("[data-fa=bc]")) { bcNew(f); return; }
+    openFournForm(f);
+  });
+}
+function startAchats() {
+  $("tabAchats").hidden = false; BC.cur = blankBc(); loadBcForm();
+  let first = true;
+  Store.onBcs((list, fourn, nums) => {
+    BC.list = list.filter((b) => b && b.id).map(normalizeBc); BC.fourn = (fourn || []).slice().sort((a, b) => a.nom.localeCompare(b.nom, "fr")); BC.nums = nums || [];
+    BC.ready = true;
+    if (first) {
+      first = false; const last = lsGet("bbcrm:lastBc", null); const pick = last && BC.list.find((b) => b.id === last);
+      if (pick && !BC.cur.id && !BC.dirty) BC.cur = normalizeBc(JSON.parse(JSON.stringify(pick)));
+      loadBcForm();
+    } else if (BC.cur && BC.cur.id && !BC.dirty) {
+      const fresh = BC.list.find((b) => b.id === BC.cur.id); if (fresh && fresh.updatedAt !== BC.cur.updatedAt) { BC.cur = normalizeBc(JSON.parse(JSON.stringify(fresh))); loadBcForm(); }
+    }
+    renderAchats(); renderSuivi();
+  });
+}
+
 
 /* ---------------- views ---------------- */
 function showView(v) {
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.view === v));
-  ["devis", "liste", "suivi", "histo", "bpu", "societe"].forEach((x) => { $("view-" + x).hidden = x !== v; });
-  if (v === "liste") renderList(); if (v === "bpu") renderBpu(); if (v === "societe") renderCompany(); if (v === "histo") renderJournal(); if (v === "suivi") renderSuivi();
+  ["devis", "liste", "suivi", "achats", "histo", "bpu", "societe"].forEach((x) => { $("view-" + x).hidden = x !== v; });
+  if (v === "liste") renderList(); if (v === "bpu") renderBpu(); if (v === "societe") renderCompany(); if (v === "histo") renderJournal(); if (v === "suivi") renderSuivi(); if (v === "achats") renderAchats();
   try { history.replaceState(null, "", "#" + v); } catch (e) {}
 }
 
@@ -2013,8 +2739,8 @@ async function boot() {
   $("btnSave").addEventListener("click", () => saveCurrent(false));
   $("btnPdfDo").addEventListener("click", () => makePdf("do"));
   $("btnPdfClient").addEventListener("click", () => makePdf("client"));
-  window.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("view-devis").hidden) saveCurrent(false); } });
-  bindHistory(); bindSuivi();
+  window.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("view-devis").hidden) saveCurrent(false); else if (!$("view-achats").hidden && BC.view === "edit") bcSave(false); } });
+  bindHistory(); bindSuivi(); bindAchats();
   $("catalogFile").addEventListener("change", async (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) await importCatalogFile(f); });
 
   if (CRM_CFG) {
@@ -2066,7 +2792,8 @@ async function startData() {
   if (Store.features.suivi) $("tabSuivi").hidden = false;
   if (Store.features.history) { $("tabHisto").hidden = false; $("listStatus").insertAdjacentHTML("beforeend", `<option value="__trash">Corbeille</option>`); }
   updateWho();
-  const hash = (location.hash || "").slice(1); if (["liste", "bpu", "societe", "histo", "suivi"].includes(hash)) showView(hash);
+  if (Store.features.achats && Store.onBcs) startAchats();
+  const hash = (location.hash || "").slice(1); if (["liste", "bpu", "societe", "histo", "suivi", "achats"].includes(hash)) showView(hash);
 
   const { mode, canWrite } = await Store.init();
   const ss = $("storeState");
@@ -2085,6 +2812,7 @@ async function startData() {
     if (cfg.mapping && cfg.mapping.map) S.mapping = cfg.mapping.map;
     if (cfg.doaddr && cfg.doaddr.map) S.doAddr = cfg.doaddr.map;
     if (cfg.suivi) suiviCfg = cfg.suivi;
+    if (cfg.achats) BC.cfg = cfg.achats;
     renderCompany(); if (!$("view-bpu").hidden) renderBpu(); renderCatalog();
   });
   Store.onGrids((list) => { S.custom = {}; list.forEach((g) => { if (g && g.id && Array.isArray(g.items)) S.custom[g.id] = g; }); renderCatalog(); if (!$("view-bpu").hidden) renderBpu(); });
@@ -2103,9 +2831,9 @@ async function startData() {
     renderSuivi();
   });
   if (Store.features.suivi && Store.onProduction) Store.onProduction((list) => { S.production = list.filter((p) => p && p.id); renderSuivi(); });
-  S.storeReady = true; renderHead();
+  S.storeReady = true; renderHead(); renderAchats();
 }
-window.addEventListener("beforeunload", (e) => { if (S.dirty && S.cur && S.cur.lines.length) { e.preventDefault(); e.returnValue = ""; } });
+window.addEventListener("beforeunload", (e) => { if ((S.dirty && S.cur && S.cur.lines.length) || (BC.dirty && BC.cur && BC.cur.lines.length)) { e.preventDefault(); e.returnValue = ""; } });
 boot();
 </script>
 
