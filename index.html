@@ -291,7 +291,7 @@ table.data.edit .w-t { width: 96px; }
 .mi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; }
 .mi-grid .mi-wide { grid-column: span 2; }
 .mi #mi-body { font-family: var(--f-mono, ui-monospace, monospace); font-size: 12.5px; line-height: 1.45; min-height: 320px; }
-.mi-actions a.btn { text-decoration: none; }
+.mi-copyrow { display: flex; gap: 6px; } .mi-copyrow input { flex: 1 1 auto; min-width: 0; } .mi-copyrow .btn { flex: none; }
 .mi-actions { position: sticky; bottom: 0; background: var(--surface); padding: 8px 0 2px; border-top: 1px solid var(--line); }
 @media (max-width: 720px) { .mi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .who { display: flex; align-items: center; gap: 6px; font-size: 12px; }
@@ -3203,8 +3203,8 @@ function missionOpen(pid) {
   const tech = (SUIVI().techniciens || []).find((t) => norm(techName(t)) === norm(p.technicien));
   openModal(`Mail de missionnement – ${p.technicien}`, `<div class="mi">
     <div class="mi-grid">
-      <label class="field mi-wide"><span>À (e-mail du technicien)${dr.v.to ? "" : ` <small class="warn-txt">· ajoutez son e-mail dans Listes : « ${esc(p.technicien)} &lt;email&gt; »</small>`}</span><input type="text" id="mi-to" inputmode="email" value="${esc(dr.v.to)}"></label>
-      <label class="field mi-wide"><span>Objet</span><input type="text" id="mi-obj" value="${esc(dr.subject)}"></label>
+      <div class="field mi-wide"><span>À (e-mail du technicien)${dr.v.to ? "" : ` <small class="warn-txt">· ajoutez son e-mail dans Listes : « ${esc(p.technicien)} &lt;email&gt; »</small>`}</span><div class="mi-copyrow"><input type="text" id="mi-to" inputmode="email" value="${esc(dr.v.to)}" aria-label="E-mail du technicien"><button class="btn sm" data-copy="mi-to" type="button">Copier</button></div></div>
+      <div class="field mi-wide"><span>Objet</span><div class="mi-copyrow"><input type="text" id="mi-obj" value="${esc(dr.subject)}" aria-label="Objet du mail"><button class="btn sm primary" data-copy="mi-obj" type="button">Copier l'objet</button></div></div>
       <label class="field"><span>Date</span><input type="date" id="mi-date" value="${esc(dr.v.date)}"></label>
       <label class="field"><span>Heure</span><input type="time" id="mi-heure" value="${esc(dr.v.heure)}" class="${dr.v.heure ? "" : "need"}"></label>
       <label class="field"><span>Durée ${dr.minutes ? `<small class="muted">· calculée depuis le devis</small>` : `<small class="warn-txt">· à préciser</small>`}</span><input type="text" id="mi-duree" value="${esc(dr.v.duree)}" placeholder="ex. 02h"></label>
@@ -3214,13 +3214,12 @@ function missionOpen(pid) {
     ${dr.hasDevis ? "" : `<p class="warn-txt" style="margin:0">Intervention sans devis lié : complétez les informations dans le texte.</p>`}
     <label class="field"><span>Mail <small class="muted" id="mi-state">· généré depuis le devis, modifiable</small></span><textarea id="mi-body" rows="18">${esc(dr.body)}</textarea></label>
     <div class="row mi-actions">
-      <a class="btn primary" id="mi-mail" href="#">Ouvrir dans la messagerie</a>
-      <button class="btn" id="mi-copy" type="button">Copier le texte</button>
+      <button class="btn primary" data-copy="mi-body" type="button">Copier le corps du mail</button>
       <button class="btn ghost" id="mi-regen" type="button" hidden>Régénérer depuis le devis</button>
       <span class="muted" style="font-size:12px">${p.missionEnvoyee ? `Déjà missionné le ${esc(fmtDT(p.missionEnvoyee))}` : ""}</span>
     </div></div>`);
   $("modal").querySelector(".modal-card").classList.add("wide");
-  missionLink(); if (!dr.v.heure) $("mi-heure").focus();
+  if (!dr.v.heure) $("mi-heure").focus();
   void tech;
 }
 function missionVals() { return { to: $("mi-to").value.trim(), date: $("mi-date").value, heure: $("mi-heure").value, duree: $("mi-duree").value.trim(), tarif: $("mi-tarif").value.trim(), contact: $("mi-contact").value.trim() }; }
@@ -3228,9 +3227,7 @@ function missionRefresh() {
   const p = (S.production || []).find((x) => x.id === MI.pid); if (!p) return; const v = missionVals();
   $("mi-heure").classList.toggle("need", !v.heure);
   if (!MI.edited) { const dr = missionDraft(p, { ...v, tarif: v.tarif === "" ? "" : parseNum(v.tarif) }); $("mi-body").value = dr.body; $("mi-obj").value = dr.subject; }
-  missionLink();
 }
-function missionLink() { $("mi-mail").href = `mailto:${encodeURIComponent($("mi-to").value.trim())}?subject=${encodeURIComponent($("mi-obj").value)}&body=${encodeURIComponent($("mi-body").value)}`; }
 async function missionDone(how) {
   const p = (S.production || []).find((x) => x.id === MI.pid); if (!p) return; const v = missionVals();
   if (!v.heure) { toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return false; }
@@ -3238,26 +3235,27 @@ async function missionDone(how) {
   const patch = { heure: v.heure, dateIntervention: v.date || p.dateIntervention, duree: v.duree, tarifMission: tarif, contactSite: v.contact, missionEnvoyee: new Date().toISOString(), missionTo: v.to };
   if ((p.prixAchat === null || p.prixAchat === undefined || p.prixAchat === "") && tarif !== null) patch.prixAchat = tarif;
   await svSaveProd(MI.pid, patch);
-  toast(how === "copy" ? "Texte copié : collez-le dans votre mail · missionnement noté" : "Mail ouvert dans votre messagerie · missionnement noté");
+  toast("Corps du mail copié : collez-le dans Outlook · missionnement noté");
   return true;
 }
 function bindMission() {
   const mb = $("modalBody");
   mb.addEventListener("input", (e) => {
     if (!MI || !e.target.id || !e.target.id.startsWith("mi-")) return;
-    if (e.target.id === "mi-body" || e.target.id === "mi-obj") { MI.edited = true; $("mi-regen").hidden = false; $("mi-state").textContent = "· modifié à la main"; missionLink(); return; }
+    if (e.target.id === "mi-body" || e.target.id === "mi-obj") { MI.edited = true; $("mi-regen").hidden = false; $("mi-state").textContent = "· modifié à la main"; return; }
+    if (e.target.id === "mi-to") return;
     missionRefresh();
   });
   mb.addEventListener("click", async (e) => {
     if (!MI) return;
     if (e.target.id === "mi-regen") { MI.edited = false; $("mi-regen").hidden = true; $("mi-state").textContent = "· généré depuis le devis, modifiable"; missionRefresh(); return; }
-    if (e.target.id === "mi-mail") { if (!$("mi-heure").value) { e.preventDefault(); toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return; } missionLink(); await missionDone("mail"); return; }
-    if (e.target.id === "mi-copy") {
-      if (!$("mi-heure").value) { toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return; }
-      const txt = $("mi-body").value; let ok = false;
-      try { await navigator.clipboard.writeText(txt); ok = true; } catch (err) { const t = $("mi-body"); t.select(); try { ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
-      if (ok) await missionDone("copy"); else toast("Copie impossible ici : sélectionnez le texte et copiez-le (Ctrl+C)");
-    }
+    const cb = e.target.closest("[data-copy]"); if (!cb) return; const id = cb.dataset.copy;
+    if (id === "mi-body" && !$("mi-heure").value) { toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return; }
+    const el = $(id); const txt = el.value; let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; } catch (err) { el.focus(); el.select(); try { ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
+    if (!ok) { el.focus(); el.select(); toast("Copie automatique impossible : le texte est sélectionné, faites Ctrl+C"); return; }
+    const old = cb.textContent; cb.textContent = "Copié ✓"; setTimeout(() => { cb.textContent = old; }, 1500);
+    if (id === "mi-body") await missionDone("copy"); else toast(id === "mi-obj" ? "Objet copié" : "E-mail copié");
   });
   $("modalClose").addEventListener("click", () => { MI = null; });
 }
