@@ -52,6 +52,10 @@ Onglet **Fil de l'eau**, reprise du fichier Excel « FIL DE L'EAU AUDIT-DEVIS »
 
 Le PDF « DO » d'un brouillon le passe automatiquement en « Envoyé – en attente » avec la date du jour.
 
+## Lire une demande (mail du DO ou compte rendu d'audit)
+
+Bouton **« Lire une demande / un compte rendu »** dans l'éditeur de devis : collez le texte, le CRM repère le DO, le client, l'adresse, la référence (BDC, n° de commande), le contact sur place et le matériel (bornes, switch, routeur, postes, baie, PC, caméras, alarme, Starlink, câble, percements…), puis propose les prestations du BPU du DO avec les quantités. Tout est modifiable dans l'aperçu avant de remplir le devis ; plusieurs sites donnent un devis par site ou un devis avec un bloc par site. Aucune IA externe : le texte n'est envoyé nulle part.
+
 ## Bons de commande
 
 Onglet **Bons de commande**, séparé des devis DO (tables `bons_commande` et `fournisseurs`, historique propre) :
