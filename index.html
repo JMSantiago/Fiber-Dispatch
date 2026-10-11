@@ -616,6 +616,7 @@ table.data.edit .w-t { width: 96px; }
             <div class="row" style="margin-top:10px">
               <button class="btn accent" id="bcPdf" type="button">PDF bon de commande</button>
               <button class="btn" id="bcVersions" type="button">Versions</button>
+              <button class="btn" id="bcLire" type="button" title="Coller une liste de matériel ou les lignes d'une offre : les articles sont ajoutés au bon">Lire une liste de matériel</button>
             </div>
           </div>
 
@@ -3260,6 +3261,142 @@ function bindMission() {
   $("modalClose").addEventListener("click", () => { MI = null; });
 }
 
+/* ---------------- LECTURE D'UNE LISTE DE MATÉRIEL → bon de commande ---------------- */
+/* Même principe que pour les devis : analyse dans le navigateur, sans service externe.
+   Le fournisseur et l'adresse de livraison restent à choisir à la main dans le bon. */
+const BCX = { text: "", plan: null, rendering: false };
+const BCX_UNIT = { pcs: "PCS", pc: "PCS", piece: "PCS", pieces: "PCS", un: "UN", u: "UN", unite: "UN", unites: "UN", mtr: "MTR", ml: "ML", m: "MTR", metre: "MTR", metres: "MTR", ens: "ENS", lot: "LOT", lots: "LOT", bte: "BTE", boite: "BTE", boites: "BTE", rou: "ROU", rouleau: "ROU", rouleaux: "ROU", couronne: "ROU", touret: "ROU" };
+function bcxNum(s) { // « 4 427,80 », « 1,503.90 », « 68,12 », « 2.54 »
+  let t = String(s).replace(/[\s ]/g, ""); if (!t) return null;
+  if (/,/.test(t) && /\./.test(t)) t = t.lastIndexOf(",") > t.lastIndexOf(".") ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+  else if (/,/.test(t)) t = /^\d{1,3}(,\d{3})+$/.test(t) ? t.replace(/,/g, "") : t.replace(",", ".");
+  const v = Number(t); return Number.isFinite(v) ? v : null;
+}
+function bcxItems(text) {
+  const out = []; const lines = text.replace(/\r/g, "").split("\n");
+  const push = (o) => { if (o.qty > 0 && o.qty < 100000 && String(o.label || o.ref || "").trim()) out.push({ ref: "", unite: "", pu: null, pour: 1, src: "texte", ...o, label: String(o.label || "").replace(/\s+/g, " ").replace(/[.,;:]+$/, "").trim() }); };
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]; const n = lxNorm(raw).trim();
+    if (!n || /^(total|cordialement|bien a vous|from|sent|to|cc|objet|subject|de|a)\s*:/.test(n) || /^(total|cordialement|merci|bonjour|bonsoir|salut)\b/.test(n)) continue;
+    const nx = lines[i + 1]; const cont = nx && /^(\s{3,}|\t)/.test(nx) && !/^\s*[\-•*]?\s*\d+\s*[x×*]/i.test(nx) && !/:\s*\S/.test(nx) ? " " + nx.trim() : "";
+    // 1) ligne d'offre fournisseur : réf. + désignation + quantité + unité + prix (… PU net … total)
+    const row = raw.match(/^\s*(?:\d{1,3}\s+)?([A-Z0-9][A-Z0-9\-\/.]{3,})\s+(.+)\s+(\d{1,5}(?:[.,]\d+)?)\s*(PCS|PC|UN|U|MTR|ML|M|ENS|LOT|BTE|ROU)\b\.?\s+(\S*\d.*)$/i); // la dernière « quantité + unité » suivie des prix
+    if (row && /\d/.test(row[5])) {
+      const qty = bcxNum(row[3]); const nums = (row[5].match(/\d{1,3}(?:[\s ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)*/g) || []).map(bcxNum).filter((v) => v !== null);
+      let pu = null, pour = 1;
+      if (nums.length >= 2) { const tot = nums[nums.length - 1]; for (const c of nums.slice(0, -1).reverse()) { if (Math.abs(qty * c - tot) <= 0.06) { pu = c; break; } if (Math.abs(qty * c / 100 - tot) <= 0.06) { pu = c; pour = 100; break; } }
+        if (pu === null && qty > 0 && tot > 0) { const est = tot / qty; const near = nums.slice(0, -1).find((c) => Math.abs(c - est) <= 0.01 * Math.max(1, est)); if (near !== undefined) pu = Math.round(est * 10000) / 10000; } }
+      else if (nums.length === 1) pu = nums[0];
+      push({ qty, ref: row[1], label: row[2].replace(/^[\s\/\-–]+/, "") + cont, unite: BCX_UNIT[lxNorm(row[4])] || row[4].toUpperCase(), pu, pour, src: "offre" });
+      if (cont) i++; continue;
+    }
+    // 2) « 3 x EAP613 », « Matériel : 1 × Baie 6U ; 2 x switch »
+    const body = raw.replace(/^[\s•*\-–]*(pr[ée]voir|mat[ée]riel[^:]{0,25}|fournitures?|[àa] commander|besoins?|liste[^:]{0,20}|commande)\s*:\s*/i, "");
+    const segs = body.split(/\s*;\s*|\s+\+\s+(?=\d+\s*[x×*]?\s*\p{L})|,\s*(?=\d+\s*(?:[x×*]|m|ml)?\s*\p{L})|\s+et\s+(?=\d+\s)/iu);
+    let found = false;
+    segs.forEach((seg, si) => {
+      const ex = seg.match(/(?:^|[^\p{L}\d.,\/])(\d{1,4})\s*[x×*]\s*(\p{L}.*)$/iu);
+      if (ex) { found = true; push({ qty: +ex[1], label: ex[2] + (si === segs.length - 1 ? cont : "") }); return; }
+      // 3) longueurs : « 25 m de câble cat6 », « 12 ml de goulotte »
+      const lm = lxNorm(seg).match(/(?:^|[^\d.,])(\d{1,4})\s*(m|ml|metres?)\b\s*(?:de\s+|d')?(\p{L}[\p{L}\d' \-\/]{2,60})/u);
+      if (lm) { found = true; const ns = lxNorm(seg); const k = ns.indexOf(lm[3]); const lab = k >= 0 ? seg.slice(k, k + lm[3].length).trim() : lm[3]; push({ qty: +lm[1], label: lab, unite: lm[2] === "ml" ? "ML" : "MTR" }); return; }
+      // 4) puce ou début de ligne : « - 3 bornes », « 2 switch PoE »
+      const s2 = lxNorm(seg).replace(new RegExp(`^([\\s•*\\-–]*)(${Object.keys(LX_NUM).join("|")})\\s+(?=\\p{L})`, "u"), (m0, b, w) => b + LX_NUM[w] + " ");
+      const bl = s2.match(/^[\s•*\-–]*(\d{1,4})\s+(\p{L}[\p{L}\d' \-\/.,()]{1,80})$/u);
+      if (bl && !LX_UNITS.test(bl[2]) && !/^(rue|avenue|av|bd|boulevard|route|chemin|allee|place|impasse|quai|cours)\b/.test(bl[2]) && !/^(octobre|novembre|decembre|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|october|november|december|january)/.test(bl[2])) {
+        found = true; const k = seg.search(/\p{L}/u); push({ qty: +bl[1], label: seg.slice(k) + (si === segs.length - 1 ? cont : "") });
+      }
+    });
+    if (found && cont) i++;
+  }
+  return out;
+}
+/* ---- rapprochement avec les articles connus (offres enregistrées + bons déjà passés) ---- */
+const bcxTokens = (s) => new Set(lxNorm(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^(les|des|une|pour|avec|sans|dans|sur|par)$/.test(w)).map((w) => (w.length > 4 && /[sx]$/.test(w) && !/\d/.test(w) ? w.slice(0, -1) : w)));
+const bcxAlnum = (s) => lxNorm(s).replace(/[^a-z0-9]/g, "");
+function bcxMatch(item, fournId) {
+  const pool = []; const fids = fournId && fournById(fournId) ? [fournId, ...BC.fourn.map((f) => f.id).filter((id) => id !== fournId)] : BC.fourn.map((f) => f.id);
+  fids.forEach((fid) => bcArticles(fid).forEach((a) => pool.push({ fid, a })));
+  const toks = bcxTokens(`${item.ref} ${item.label}`); const ref = bcxAlnum(item.ref);
+  return pool.map((c) => {
+    const ar = bcxAlnum(c.a.ref); const txt = bcxAlnum(`${c.a.ref} ${c.a.des}`); let sc = 0;
+    if (ref && (ar === ref || txt.includes(ref))) sc = 100;
+    else if (ar.length >= 4 && bcxAlnum(item.label).includes(ar)) sc = 95;
+    else { const t2 = bcxTokens(`${c.a.ref} ${c.a.des}`); let common = 0; toks.forEach((w) => { if (t2.has(w)) common++; }); const m = Math.min(toks.size, t2.size); sc = m ? Math.round((common / m) * 80) : 0; }
+    if (c.fid === fournId) sc += 5;
+    return { ...c, sc };
+  }).filter((c) => c.sc >= 45).sort((a, b) => b.sc - a.sc).slice(0, 4);
+}
+function bcxBuild(text) {
+  const b = BC.cur; const items = bcxItems(text); const h = lxHeader(text);
+  const offre = (text.match(/(?:devis(?:\s+vente)?|offre(?:\s+de\s+prix)?)\s*(?:n\s*[°ºo]\.?)?\s*:?\s*([A-Z]{0,4}\d{6,})/i) || [])[1] || "";
+  // article connu repris d'office seulement s'il n'y a pas de doute (même réf., ou nettement meilleur que le suivant)
+  const sure = (c) => c.length && (c[0].sc >= 95 || (c[0].sc >= 60 && (!c[1] || c[0].sc - c[1].sc >= 10)));
+  const lines = items.map((it) => { const cands = bcxMatch(it, b.fournisseurId); return { on: true, qty: it.qty, it, cands, sel: it.src === "offre" || !sure(cands) ? -1 : 0 }; });
+  return { lines, affaireVal: b.affaire || [h.client, h.reference].filter(Boolean).join(" – "), refVal: b.refOffre || offre };
+}
+function bcxOpen() {
+  if (!BC.cur) return;
+  openModal("Lire une liste de matériel", `<div class="lx">
+    <label class="field"><span>Collez la liste de matériel (mail, compte rendu) ou les lignes d'une offre fournisseur</span><textarea id="bcxText" rows="9" placeholder="ex. 3 x EAP613, 1 x Baie de brassage 6U, 25 m de câble Cat6… ou des lignes d'offre : 411815 PLANET GTP-805A … 65 PCS 104,80 35,00 68,12 4 427,80">${esc(BCX.text)}</textarea></label>
+    <div class="row"><button class="btn primary" id="bcxGo" type="button">Analyser</button><span class="muted" style="font-size:12px">Analyse faite dans le CRM, rien n'est envoyé. Le fournisseur et l'adresse de livraison ne sont pas modifiés.</span></div>
+    <div id="bcxOut"></div></div>`);
+  $("modal").querySelector(".modal-card").classList.add("wide"); $("bcxText").focus();
+}
+function bcxAnalyse() { const t = $("bcxText").value; BCX.text = t; if (!t.trim()) { toast("Collez d'abord la liste de matériel"); return; } BCX.plan = bcxBuild(t); bcxRender(); }
+function bcxLinePu(l) { if (l.sel >= 0) { const a = l.cands[l.sel].a; return { pu: a.pu, pour: Number(a.pour) || 1 }; } return { pu: l.it.pu, pour: l.it.pour || 1 }; }
+function bcxRender() {
+  if (BCX.rendering) return; BCX.rendering = true;
+  try {
+    const p = BCX.plan; const b = BC.cur; const nOn = p.lines.filter((l) => l.on).length;
+    const total = p.lines.filter((l) => l.on).reduce((s, l) => { const x = bcxLinePu(l); return s + (Number(x.pu) || 0) * l.qty / (x.pour || 1); }, 0);
+    $("bcxOut").innerHTML = `<div class="lx-res">
+      <div class="lx-head">
+        <label class="field"><span>Fournisseur <small class="muted">· choisi dans le bon</small></span><input type="text" value="${esc(b.fournisseur.nom || "— à choisir dans le bon —")}" disabled></label>
+        <label class="field"><span>Affaire / chantier ${b.affaire ? `<small class="muted">· déjà remplie dans le bon</small>` : ""}</span><input type="text" id="bcx-affaire" value="${esc(p.affaireVal)}"></label>
+        <label class="field"><span>Réf. offre fournisseur</span><input type="text" id="bcx-refOffre" value="${esc(p.refVal)}"></label>
+      </div>
+      ${p.lines.length ? `<ul class="lx-notes"><li>Décochez ce que vous n'avez pas à commander. Chaque ligne peut reprendre un article déjà connu (prix enregistré) ou rester telle que dans le texte.</li></ul>
+      <div style="overflow-x:auto"><table class="data lx-t"><thead><tr><th></th><th>Qté</th><th>Article</th><th class="r">PU net HT</th><th class="r">Total HT</th></tr></thead><tbody>${p.lines.map((l, i) => {
+        const x = bcxLinePu(l); const tq = [l.it.ref, l.it.label].filter(Boolean).join(" – ");
+        const opts = l.cands.map((c, k) => `<option value="${k}" ${k === l.sel ? "selected" : ""}>${esc(c.a.ref || "—")} – ${esc(String(c.a.des).slice(0, 70))} · ${c.a.pu === null || c.a.pu === undefined ? "prix à saisir" : esc(puTxt(c.a.pu, c.a.pour))} (${esc((fournById(c.fid) || {}).nom || "")})</option>`).join("")
+          + `<option value="-1" ${l.sel === -1 ? "selected" : ""}>Tel quel : ${esc(tq.slice(0, 80))}${l.it.pu !== null ? " · " + esc(puTxt(l.it.pu, l.it.pour)) : ""}</option>`;
+        return `<tr data-l="${i}" class="${l.on ? "" : "off"}"><td><input type="checkbox" data-x="on" ${l.on ? "checked" : ""} aria-label="Commander cette ligne"></td>
+          <td><input type="text" inputmode="decimal" class="num" data-x="qty" value="${esc(qtyStr(l.qty))}" style="width:64px;text-align:right" aria-label="Quantité"></td>
+          <td><select data-x="sel" aria-label="Article">${opts}</select><div class="lx-why">Lu : ${esc(tq)}${l.it.unite ? " · " + esc(l.it.unite) : ""}${l.cands.length && l.sel >= 0 ? ` · <span class="lx-note">article connu reconnu</span>` : ""}</div></td>
+          <td class="r money">${x.pu === null || x.pu === undefined ? `<span class="warn-txt">à saisir</span>` : esc(puTxt(x.pu, x.pour))}</td><td class="r money">${x.pu === null || x.pu === undefined ? "" : money((Number(x.pu) || 0) * l.qty / (x.pour || 1))}</td></tr>`; }).join("")}</tbody></table></div>`
+      : `<ul class="lx-notes"><li>Aucune ligne de matériel reconnue. Utilisez le format « 3 x article » ou « 25 m de câble », une ligne par article.</li></ul>`}
+      <div class="lx-foot"><span class="lx-total">${nOn} ligne${nOn > 1 ? "s" : ""} cochée${nOn > 1 ? "s" : ""} · <b>${money(total)}</b> HT</span>
+        <button class="btn primary" id="bcxApply" type="button" ${nOn ? "" : "disabled"}>Ajouter au bon de commande</button></div></div>`;
+  } finally { BCX.rendering = false; }
+}
+function bcxApply() {
+  const p = BCX.plan; if (!p) return; const b = BC.cur;
+  const aff = ($("bcx-affaire") ? $("bcx-affaire").value : p.affaireVal).trim(), ro = ($("bcx-refOffre") ? $("bcx-refOffre").value : p.refVal).trim();
+  if (aff) b.affaire = aff; if (ro) b.refOffre = ro;
+  let n = 0;
+  p.lines.filter((l) => l.on).forEach((l) => {
+    if (l.sel >= 0) { const a = l.cands[l.sel].a; b.lines.push({ id: uid(), kind: "item", ref: a.ref || "", des: a.des || "", qt: l.qty, unite: a.unite || l.it.unite || "UN", pu: a.pu ?? null, pour: Number(a.pour) || 1 }); }
+    else b.lines.push({ id: uid(), kind: "item", ref: l.it.ref || "", des: l.it.label || "", qt: l.qty, unite: l.it.unite || "UN", pu: l.it.pu ?? null, pour: l.it.pour || 1 });
+    n++;
+  });
+  closeModal(); BCX.text = ""; BCX.plan = null; loadBcForm(); bcMarkDirty();
+  const sans = b.lines.slice(-n).filter((l) => l.pu === null || l.pu === undefined).length;
+  toast(`${n} ligne${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""}${sans ? ` dont ${sans} prix à saisir` : ""}${b.fournisseur.nom ? "" : " · choisissez le fournisseur"}`);
+}
+function bindLectureBc() {
+  $("bcLire").addEventListener("click", bcxOpen);
+  const mb = $("modalBody");
+  mb.addEventListener("click", (e) => { if (e.target.id === "bcxGo") bcxAnalyse(); else if (e.target.id === "bcxApply") bcxApply(); });
+  mb.addEventListener("keydown", (e) => { if (e.target.id === "bcxText" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); bcxAnalyse(); } });
+  mb.addEventListener("change", (e) => {
+    if (!BCX.plan || BCX.rendering || !$("bcxOut")) return; const tr = e.target.closest("tr[data-l]"); if (!tr || !tr.closest("#bcxOut")) return;
+    const l = BCX.plan.lines[+tr.dataset.l]; const x = e.target.dataset.x;
+    if (x === "on") l.on = e.target.checked; if (x === "sel") l.sel = +e.target.value; if (x === "qty") l.qty = parseNum(e.target.value) ?? l.qty;
+    BCX.plan.affaireVal = $("bcx-affaire").value; BCX.plan.refVal = $("bcx-refOffre").value; bcxRender();
+  });
+}
+
 
 /* ---------------- views ---------------- */
 function showView(v) {
@@ -3279,7 +3416,7 @@ async function boot() {
   $("btnPdfDo").addEventListener("click", () => makePdf("do"));
   $("btnPdfClient").addEventListener("click", () => makePdf("client"));
   window.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("view-devis").hidden) saveCurrent(false); else if (!$("view-achats").hidden && BC.view === "edit") bcSave(false); } });
-  bindHistory(); bindSuivi(); bindAchats(); bindLecture(); bindMission();
+  bindHistory(); bindSuivi(); bindAchats(); bindLecture(); bindMission(); bindLectureBc();
   $("catalogFile").addEventListener("change", async (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) await importCatalogFile(f); });
 
   if (CRM_CFG) {

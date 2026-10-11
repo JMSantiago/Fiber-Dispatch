@@ -62,6 +62,7 @@ Bouton **« Lire une demande / un compte rendu »** dans l'éditeur de devis : c
 Onglet **Bons de commande**, séparé des devis DO (tables `bons_commande` et `fournisseurs`, historique propre) :
 
 - **Bon de commande** : fournisseur (adresse et contact repris automatiquement), réf. de l'offre fournisseur, affaire / chantier, devis DO lié (facultatif), livraison (notre adresse mémorisée, chantier ou enlèvement en agence), articles avec prix « pour 1 / 100 / 1000 » (les « /C » de Sonepar ou Rexel), PDF avec logo. Télécharger le PDF d'un brouillon le passe en « Commandé ».
+- **Lire une liste de matériel** : collez une liste (mail, compte rendu) ou des lignes d'offre fournisseur ; quantités, unités et prix sont repris (prix « pour 100 » compris), les articles déjà connus sont proposés. Le fournisseur et la livraison restent à choisir à la main.
 - **Liste des bons** : filtres fournisseur, statut, mois ; export Excel ; versions et corbeille.
 - **Fournisseurs** : créés ou complétés automatiquement à l'enregistrement d'un bon. Les articles déjà commandés sont proposés dans le panneau de droite des bons suivants.
 - Dans **Production**, le montant des bons liés au devis s'affiche sous le prix d'achat.
