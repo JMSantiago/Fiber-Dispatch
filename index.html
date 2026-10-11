@@ -284,6 +284,16 @@ tr.late td { background: color-mix(in srgb, var(--warn-soft) 70%, transparent); 
 .fact-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .fact-mark { display: inline-flex; gap: 6px; align-items: center; } .fact-mark input { width: 150px; }
 td .fact-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+/* Missionnement */
+table.data.edit input.need, table.data.edit select.need, .mi input.need { border-color: var(--bad); background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad); }
+table.data.edit .w-t { width: 96px; }
+.mi { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.mi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; }
+.mi-grid .mi-wide { grid-column: span 2; }
+.mi #mi-body { font-family: var(--f-mono, ui-monospace, monospace); font-size: 12.5px; line-height: 1.45; min-height: 320px; }
+.mi-actions a.btn { text-decoration: none; }
+.mi-actions { position: sticky; bottom: 0; background: var(--surface); padding: 8px 0 2px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) { .mi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .who { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .linkish { border: 0; background: none; padding: 0; font-weight: 600; color: var(--brand); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
@@ -564,7 +574,11 @@ td .fact-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
           <label class="field"><span>Relancer au bout de (jours)</span><input type="number" id="svlDelai" min="1" step="1" style="max-width:120px"></label>
           <label class="field"><span>CDP (un par ligne)</span><textarea id="svlCdps" rows="5"></textarea></label>
           <label class="field"><span>Activités (une par ligne)</span><textarea id="svlActs" rows="5"></textarea></label>
-          <label class="field"><span>Techniciens proposés (un par ligne)</span><textarea id="svlTechs" rows="6"></textarea></label>
+          <label class="field"><span>Techniciens proposés (un par ligne, avec l'e-mail pour le missionnement : « Prénom NOM &lt;email&gt; »)</span><textarea id="svlTechs" rows="6"></textarea></label>
+          <h2 style="margin-top:8px">Mail de missionnement</h2>
+          <label class="field"><span>Lien du portail des formulaires</span><input type="text" id="svlFormUrl" placeholder="https://…/Couverture-Formulaire/"></label>
+          <label class="field"><span>Mot de passe du portail (écrit dans le mail)</span><input type="text" id="svlFormMdp" autocomplete="off"></label>
+          <label class="field"><span>Support (une ligne par personne)</span><textarea id="svlSupport" rows="3" placeholder="Prénom NOM : téléphone"></textarea></label>
           <div class="row"><button class="btn primary" id="svlSave" type="button">Enregistrer les listes</button></div>
         </div>
       </div>
@@ -2016,19 +2030,23 @@ function renderSvProd() {
   if (!(S.production || []).length) { $("svpWrap").innerHTML = `<div class="empty-state"><b>Aucune intervention pour l'instant</b>Les devis acceptés arrivent ici automatiquement. Ajoutez une intervention sans devis avec « Nouvelle intervention ».</div>`; return; }
   if (!P.length) { $("svpWrap").innerHTML = `<div class="empty-state"><b>Aucune intervention ne correspond</b>Modifiez la recherche ou les filtres.</div>`; return; }
   const opt = (vals, cur, empty) => (empty !== undefined ? `<option value="">${esc(empty)}</option>` : "") + Array.from(new Set([...vals, ...(cur && !vals.includes(cur) ? [cur] : [])])).map((v) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("");
-  $("svpWrap").innerHTML = `<table class="data edit" style="min-width:1620px"><thead><tr><th>CDP</th><th>Donneur d'ordre</th><th>Site</th><th>Activité</th><th>N° ticket</th><th>Date intervention</th><th class="r">Prix vente € HT</th><th class="r">Prix achat € HT</th><th class="r">Marge € HT</th><th>Technicien</th><th>Statut</th><th>N° facture</th><th>Commentaire</th><th class="r">Marge %</th><th></th></tr></thead><tbody>` +
-    P.map((p) => { const m = marge(p), mp = margePct(p); return `<tr data-pid="${esc(p.id)}">
+  $("svpWrap").innerHTML = `<table class="data edit" style="min-width:1900px"><thead><tr><th>CDP</th><th>Donneur d'ordre</th><th>Site</th><th>Activité</th><th>N° ticket</th><th>Date intervention</th><th>Heure</th><th class="r">Prix vente € HT</th><th class="r">Prix achat € HT</th><th class="r">Marge € HT</th><th>Technicien</th><th>Statut</th><th>Missionnement</th><th>N° facture</th><th>Commentaire</th><th class="r">Marge %</th><th></th></tr></thead><tbody>` +
+    P.map((p) => { const m = marge(p), mp = margePct(p); const todo = PLANIFIABLE.includes(p.statut); const need = (v) => (todo && !String(v || "").trim() ? "need" : "");
+      const mis = !todo && p.statut !== "REALISE" ? "" : planned(p) ? `<button class="btn sm ${p.missionEnvoyee ? "" : "primary"}" data-mission="1" type="button">${p.missionEnvoyee ? "Renvoyer le mail" : "Envoyer mail de missionnement"}</button>${p.missionEnvoyee ? `<div class="fact-date">missionné le ${esc(fmtDT(p.missionEnvoyee))}</div>` : ""}` : `<span class="warn-txt" style="font-size:12px">À planifier : date, heure, technicien</span>`;
+      return `<tr data-pid="${esc(p.id)}">
       <td><select class="w-m" data-pf="cdp">${opt(cfg.cdps, p.cdp || ARBITRER)}</select></td>
       <td><input class="w-m" data-pf="doName" list="doList" value="${esc(p.doName || "")}"></td>
       <td><input class="w-l" data-pf="site" value="${esc(p.site || "")}">${p.devisId ? `<div style="font-size:12px">devis <button class="linkish mono" data-open-devis="${esc(p.devisId)}">${esc(p.num || "ouvrir")}</button></div>` : ""}</td>
       <td><select class="w-s" data-pf="activite">${opt(cfg.activites, p.activite, "—")}</select></td>
       <td><input class="w-s" data-pf="ticket" value="${esc(p.ticket || "")}"></td>
-      <td><input type="date" class="w-m" data-pf="dateIntervention" value="${esc(p.dateIntervention || "")}"></td>
+      <td><input type="date" class="w-m ${need(p.dateIntervention)}" data-pf="dateIntervention" value="${esc(p.dateIntervention || "")}"></td>
+      <td><input type="time" class="w-t ${need(p.heure)}" data-pf="heure" value="${esc(p.heure || "")}" aria-label="Heure d'intervention"></td>
       <td class="r"><input class="w-n" inputmode="decimal" data-pf="prixVente" value="${p.prixVente === null || p.prixVente === undefined || p.prixVente === "" ? "" : esc(fmtNum(p.prixVente))}"></td>
       <td class="r"><input class="w-n" inputmode="decimal" data-pf="prixAchat" value="${p.prixAchat === null || p.prixAchat === undefined || p.prixAchat === "" ? "" : esc(fmtNum(p.prixAchat))}">${bcHint(p)}</td>
       <td class="r money ${m !== null && m < 0 ? "neg" : ""}">${m === null ? "" : money(m)}</td>
-      <td><input class="w-m" data-pf="technicien" list="techList" value="${esc(p.technicien || "")}"></td>
+      <td><input class="w-m ${need(p.technicien)}" data-pf="technicien" list="techList" value="${esc(p.technicien || "")}"></td>
       <td><select class="w-m" data-pf="statut">${PROD_STATUTS.map((s) => `<option value="${s}" ${s === p.statut ? "selected" : ""}>${PROD_LABEL[s]}</option>`).join("")}</select></td>
+      <td style="white-space:nowrap">${mis}</td>
       <td><input class="w-s" data-pf="factureNum" value="${esc(p.factureNum || "")}" placeholder="${aFacturer(p) ? "à facturer" : "—"}">${p.factureDate && estFacture(p) ? `<div class="fact-date">le ${frDate(p.factureDate)}</div>` : ""}</td>
       <td><input class="w-l" data-pf="commentaire" value="${esc(p.commentaire || "")}" placeholder="—"></td>
       <td class="r">${mp === null ? "" : `<span class="${mp < 0 ? "neg" : ""}">${pct(mp)}</span>`}</td>
@@ -2038,6 +2056,7 @@ let armedProd = null;
 async function svSaveProd(id, patch) {
   const p = (S.production || []).find((x) => x.id === id); if (!p || S.readOnly) return;
   const np = { ...JSON.parse(JSON.stringify(p)), ...patch }; delete np.updatedBy;
+  if (np.statut === "A PLANIFIER" && planned(np) && !("statut" in patch)) np.statut = "PLANIFIE"; // date + heure + technicien = planifié
   if (await Store.saveProduction(np)) renderSuivi();
 }
 
@@ -2046,6 +2065,7 @@ let svRepDraft = null;
 function renderSvListes() {
   const cfg = SUIVI(); if (!svRepDraft) svRepDraft = { ...cfg.repartition };
   $("svlDelai").value = cfg.delaiRelance; $("svlCdps").value = cfg.cdps.join("\n"); $("svlActs").value = cfg.activites.join("\n"); $("svlTechs").value = cfg.techniciens.join("\n");
+  const mc = missionCfg(); $("svlFormUrl").value = mc.formUrl || ""; $("svlFormMdp").value = mc.mdp || ""; $("svlSupport").value = mc.support || "";
   fillSelect($("svlRepCdp"), cfg.cdps, cfg.cdps[0]);
   const rows = Object.entries(svRepDraft).sort((a, b) => doName(a[0]).localeCompare(doName(b[0])));
   $("svlRep").innerHTML = rows.map(([code, c]) => `<tr data-code="${esc(code)}"><td>${esc(doName(code))}</td><td><select data-rep="1">${cfg.cdps.map((v) => `<option ${v === c ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></td><td><button class="icon-btn" data-repdel="1" aria-label="Retirer ${esc(doName(code))}">✕</button></td></tr>`).join("")
@@ -2062,7 +2082,7 @@ function renderSuivi() {
   ["activite", "devis", "production", "listes"].forEach((v) => { $("sv-" + v).hidden = v !== svView; });
   document.querySelectorAll("[data-sv]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.sv === svView)));
   const cfg = SUIVI();
-  $("techList").innerHTML = cfg.techniciens.map((t) => `<option value="${esc(t)}"></option>`).join("");
+  $("techList").innerHTML = cfg.techniciens.map((t) => `<option value="${esc(techName(t))}"></option>`).join("");
   const keepSel = (sel, html) => { const v = sel.value; sel.innerHTML = html; sel.value = v; if (sel.selectedIndex < 0) sel.selectedIndex = 0; };
   const uniq = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, "fr"));
   keepSel($("svdDo"), `<option value="">Tous les DO</option>` + uniq(svDevis().map(doOf)).map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join(""));
@@ -2133,6 +2153,7 @@ function bindSuivi() {
   });
   $("svpWrap").addEventListener("click", async (e) => {
     const od = e.target.closest("[data-open-devis]"); if (od) { openDevis(od.dataset.openDevis); return; }
+    const mb = e.target.closest("[data-mission]"); if (mb) { missionOpen(mb.closest("tr").dataset.pid); return; }
     const del = e.target.closest("[data-pdel]"); if (!del) return; const id = del.closest("tr").dataset.pid;
     if (armedProd !== id) { armedProd = id; renderSvProd(); setTimeout(() => { if (armedProd === id) { armedProd = null; renderSvProd(); } }, 4000); return; }
     armedProd = null; if (await Store.deleteProduction(id)) { toast("Intervention supprimée"); renderSuivi(); }
@@ -2153,7 +2174,8 @@ function bindSuivi() {
   $("svlSave").addEventListener("click", () => {
     const lines = (id) => Array.from(new Set($(id).value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)));
     const cdps = lines("svlCdps"); if (!cdps.includes(ARBITRER)) cdps.push(ARBITRER);
-    saveSuivi({ ...SUIVI(), delaiRelance: Math.max(1, Math.round(parseNum($("svlDelai").value) || 7)), cdps, activites: lines("svlActs"), techniciens: lines("svlTechs"), repartition: { ...svRepDraft } }, "Listes enregistrées");
+    saveSuivi({ ...SUIVI(), delaiRelance: Math.max(1, Math.round(parseNum($("svlDelai").value) || 7)), cdps, activites: lines("svlActs"), techniciens: lines("svlTechs"), repartition: { ...svRepDraft },
+      mission: { formUrl: $("svlFormUrl").value.trim(), mdp: $("svlFormMdp").value.trim(), support: $("svlSupport").value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).join("\n") } }, "Listes enregistrées");
   });
 }
 
@@ -3063,6 +3085,183 @@ function bindLecture() {
   });
 }
 
+/* ---------------- MAIL DE MISSIONNEMENT (Fil de l'eau → Production) ---------------- */
+/* Construit à partir du devis lié : tâches (bornes, câble, gaine, fibre, nacelle…) avec les longueurs,
+   durée, tarif, adresse. Lien du portail, mot de passe et support : réglages Supabase (onglet Listes). */
+const MISSION_FORMS = [ // portail Couverture-Formulaire : un formulaire par type de prestation
+  ["starlink", "Antenne Starlink", /starlink/],
+  ["pico-quatra", "PICO BTS / Cel-Fi Quatra", /\bpico\b|quatra|cel-?fi/],
+  ["4g-5g", "Antenne 4G / 5G", /antenne[^.]{0,20}\b(4g|5g)\b|\b(4g|5g)\b[^.]{0,20}antenne/],
+  ["camera-alarme", "Caméras & Alarme", /camera|alarme|video/],
+  ["cablage-wifi", "Câblage Wi-Fi", /\bbornes?\b|wi-?fi/],
+  ["cablage", "Câblage", /./]
+];
+const PLANIFIABLE = ["A PLANIFIER", "PLANIFIE", "REPORTE"];
+const techEntry = (t) => { const s = String(t || ""); const email = (s.match(/[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+/) || [""])[0];
+  const name = s.replace(email, "").replace(/[<>()\[\]]/g, " ").replace(/\s*[-–;|,]\s*$/, "").replace(/\s+/g, " ").trim(); return { name, email }; };
+const techName = (t) => techEntry(t).name;
+const missionCfg = () => ({ formUrl: "", mdp: "", support: "", ...((SUIVI().mission) || {}) });
+const planned = (p) => !!(p.dateIntervention && p.heure && String(p.technicien || "").trim());
+const heureTxt = (h) => { const m = String(h || "").match(/^(\d{1,2}):(\d{2})/); return m ? `${+m[1]}h${m[2] === "00" ? "" : m[2]}` : String(h || ""); };
+const dureeTxt = (min) => { if (!min) return ""; const h = Math.floor(min / 60), m = min % 60; return `${String(h).padStart(2, "0")}h${m ? String(m).padStart(2, "0") : ""}`; };
+const tarifTxt = (n) => { const v = parseNum(n); if (v === null) return ""; return (Number.isInteger(v) ? String(v) : fmtNum(v)) + "€"; };
+
+function missionSource(p) {
+  const d = p.devisId ? S.devis.find((x) => x.id === p.devisId) : null;
+  const lines = d ? (d.lines || []).filter((l) => l.kind !== "text" && (l.des || l.ref)) : [];
+  const itemOf = (l) => { const g = l.src && gridById(l.src); return (g && (g.items.find((it) => it.ref === l.ref && it.des === l.des) || g.items.find((it) => it.ref === l.ref))) || null; };
+  return { d, lines, itemOf };
+}
+function lineMinutes(l, it) {
+  const s = lxNorm(`${l.des} ${(it && it.det) || ""}`); const q = Number(l.qt) || 1;
+  if (/demi[- ]?journee|1\/2 journee/.test(s)) return 210 * q;
+  if (/(main d.?oeuvre|technicien)[^.]{0,40}(la journee|par jour)|journee 7 ?h/.test(s)) return 420 * q;
+  if (/(main d.?oeuvre|technicien)[^.]{0,40}par heure|heure supplementaire/.test(s)) return 60 * q;
+  const m = s.match(/duree(?: estimee)?(?: de)?\s*:?\s*(\d{1,2})\s*h\s*(\d{2})?/) || s.match(/ - (\d{1,2})h(\d{2})? - /);
+  return m ? +m[1] * 60 + (+m[2] || 0) : 0; // forfait : une fois
+}
+const isAuditLine = (s) => /\baudit\b|visite technique|pre-?visite|\bvt\b|\betude\b|recette/.test(s);
+const isNoise = (s) => (/\bdeplacement\b|accessoires de fixation|frais|coordination|chefferie|majoration|supplement delai/.test(s) && !/\bborne/.test(s)) || /main d.?oeuvre|technicien (cableur|referent|assistant)|\bmo-t/.test(s);
+function auditBullets(l, it) {
+  const det = String((it && it.det) || "").replace(/\s+/g, " ").trim();
+  const out = det.split(/(?<=\.)\s+/).map((x) => x.replace(/\.$/, "").trim()).filter(Boolean)
+    .filter((x) => !/^(audit de site|duree)[^:]*\d\s*h(\d{2})?$/i.test(lxNorm(x)) && !/^prix/i.test(x))
+    .map((x) => x.replace(/^dur[ée]e[^:]*?pour (\p{L}+)/iu, (m0, v) => v.charAt(0).toUpperCase() + v.slice(1)).replace(/^Compte rendu/i, "Faire un compte rendu"));
+  return out.length ? out : [`Réaliser : ${String(l.des).split("\n")[0]}`];
+}
+function missionBullets(lines, itemOf) {
+  const B = [], agg = {}; const add = (k, n) => { agg[k] = (agg[k] || 0) + n; };
+  const meters = (l, s) => { const q = Number(l.qt) || 0; if (/forfait/.test(s)) { const f = s.match(/(\d{2,3})\s*m(?:l|etres?)?\b/); return f ? +f[1] * q : q; } return q; };
+  lines.forEach((l) => {
+    const it = itemOf(l); const s = lxNorm(`${l.ref} ${l.des}`); const q = Number(l.qt) || 1;
+    const first = String(l.des).split("\n")[0].replace(/\s*\((par|le|la)\s[^)]*\)/gi, "").replace(/\s+/g, " ").trim();
+    if (isNoise(s)) return;
+    if (isAuditLine(s)) { auditBullets(l, it).forEach((b) => B.push(b)); return; }
+    if (/supplement[^.]{0,30}(hauteur|plafond)/.test(s) && /borne/.test(s)) { agg.hauteur = true; return; }
+    if (/\bbornes?\b/.test(s) && !/dect/.test(s)) { add("borne", q); return; }
+    if (/switch poe|pose (d'un )?switch/.test(s)) { add("switch", q); return; }
+    if (/centrex|routeur \+ postes|mer data/.test(s)) { const r = (lxNorm(first).match(/(\d+)\s*(?:a|-)\s*(\d+)\s*postes/) || []); B.push(`Installer le routeur et les postes IP${r[1] ? ` (Centrex ${r[1]} à ${r[2]} postes)` : ""}, tests et prise en main utilisateur`); return; }
+    if (/equipements? d'?extremite|equipement (supplementaire|additionnel)/.test(s)) { add("equip", q); return; }
+    if (/\bbaie\b/.test(s) && !/remise au propre|etagere|bandeau|panneau/.test(s)) { const u = (s.match(/(\d{1,2})\s*u\b/) || [])[1]; B.push(`${/pose seule/.test(s) ? "Poser" : "Fournir et poser"} la baie de brassage${u ? " " + u + "U" : ""}${q > 1 ? ` (× ${q})` : ""}`); return; }
+    if (/poste de travail|postes de travail/.test(s)) { add("pc", q); return; }
+    if (/fibre|optique|\bfo\b/.test(s) && /\bml\b|metre|\bm\b|forfait|par ml/.test(s)) { add("fibre", meters(l, s)); return; }
+    if (/cable rj45|cable[^.]{0,15}cat ?6|cable reseau/.test(s)) { add("rj45", meters(l, s)); return; }
+    if (/\bgaine\b/.test(s)) { add("gaine", meters(l, s)); return; }
+    if (/goulotte/.test(s)) { add("goulotte", meters(l, s)); return; }
+    if (/tube iro|chemin de cable|cablofil/.test(s)) { B.push(`${first} : ${qtyStr(q)}${/\bml\b|par ml|\bm\b/.test(s) ? " m" : ""}`); return; }
+    if (/desserte/.test(s)) { B.push(`Réaliser ${q > 1 ? q + " dessertes" : "la desserte"} (${first.replace(/^.*?desserte\s*/i, "")})`); return; }
+    if (/perc(ement|age)|carottage/.test(s)) { B.push(/tous types|forfait/.test(s) ? "Réaliser les percements nécessaires" : `Réaliser ${qtyStr(q)} percement${q > 1 ? "s" : ""} (${first.replace(/^.*?(percement|percage|perçage)\s*/i, "").replace(/^(simple|d'une?|de)\s+/i, "").replace(/\s*:\s*/g, " : ")})`); return; }
+    if (/nacelle/.test(s)) { B.push(`Nacelle prévue : ${first.replace(/^(mise a disposition|mise à disposition|location)\s+(de\s+|d'une?\s+)?/i, "")}${q > 1 ? ` (${qtyStr(q)} jours)` : ""}`); return; }
+    if (/camera/.test(s)) { add("camera", /1 a 3/.test(s) ? Math.max(1, q) : q); return; }
+    if (/alarme/.test(s)) { B.push(`Installer l'alarme : ${first}${q > 1 ? ` (× ${qtyStr(q)})` : ""}`); return; }
+    if (/starlink/.test(s)) { B.push("Installer l'antenne Starlink : fixation, passage du câble, mise en service et test de débit"); return; }
+    B.push(`${first}${q !== 1 ? ` (× ${qtyStr(q)})` : ""}`);
+  });
+  const top = [];
+  if (agg.borne) top.push(`Poser ${agg.borne} borne${agg.borne > 1 ? "s" : ""} Wi-Fi${agg.hauteur ? " en hauteur (au-delà de 2,50 m)" : ""} et ${agg.borne > 1 ? "les" : "la"} mettre en service`);
+  if (agg.switch) top.push(`Installer ${agg.switch > 1 ? agg.switch + " switchs" : "le switch"} PoE dans la baie`);
+  if (agg.equip) top.push(`Installer et mettre en service ${agg.equip > 1 ? agg.equip + " équipements" : "l'équipement"} (routeur / switch / modem) pré paramétré${agg.equip > 1 ? "s" : ""}`);
+  if (agg.pc) top.push(`Installer et configurer ${agg.pc > 1 ? agg.pc + " postes" : "le poste"} de travail, prise en main utilisateur`);
+  if (agg.camera) top.push(`Installer ${agg.camera > 1 ? agg.camera + " caméras" : "la caméra"}`);
+  if (agg.rj45) top.push(`Tirer ${qtyStr(agg.rj45)} m de câble RJ45 Cat6`);
+  if (agg.fibre) top.push(`Tirer ${qtyStr(agg.fibre)} m de fibre optique`);
+  if (agg.gaine) top.push(`Poser ${qtyStr(agg.gaine)} m de gaine ICTA avec tire-fil`);
+  if (agg.goulotte) top.push(`Poser ${qtyStr(agg.goulotte)} m de goulotte`);
+  return [...top, ...B];
+}
+function missionDraft(p, o) {
+  const { d, lines, itemOf } = missionSource(p); const cfg = missionCfg();
+  const norms = lines.map((l) => lxNorm(`${l.ref} ${l.des}`)).filter((s) => !isNoise(s));
+  const audit = norms.length > 0 && norms.every(isAuditLine);
+  const minutes = lines.reduce((s, l) => s + lineMinutes(l, itemOf(l)), 0);
+  const all = lxNorm([...lines.map((l) => `${l.ref} ${l.des}`), p.activite].join(" "));
+  const form = MISSION_FORMS.find(([, , re]) => re.test(all));
+  const c = (d && d.client) || {};
+  const adresse = [c.address, c.cpVille].filter(Boolean).join(", ") || p.site || "";
+  const raison = c.name || p.site || "";
+  const bullets = missionBullets(lines, itemOf);
+  if (!lines.length && p.commentaire) bullets.push(p.commentaire);
+  if (!bullets.some((b) => /compte rendu/i.test(b))) bullets.push(audit ? "Faire un compte rendu avec photos et la solution retenue" : "Faire un compte rendu avec photos de l'installation");
+  if (cfg.formUrl) bullets.push(`Faire le rapport sur ${cfg.formUrl.replace(/\/?$/, "/")}${form[0]}/\n${cfg.mdp ? `mdp : ${cfg.mdp} et ` : ""}choisir "${form[1]}" dans le portail, en mode ${audit ? "AUDIT" : "TRAVAUX"}.`);
+  const v = { to: techEntry((SUIVI().techniciens || []).find((t) => norm(techName(t)) === norm(p.technicien)) || "").email,
+    date: p.dateIntervention || "", heure: p.heure || "", duree: p.duree || dureeTxt(minutes), tarif: p.tarifMission ?? p.prixAchat ?? "",
+    contact: p.contactSite ?? ((d && String(d.commentaire || "").match(/contact sur place\s*:\s*([^·\n]+)(?:·\s*t[ée]l\.?\s*([^·\n]+))?/i)) || []).slice(1).filter(Boolean).join(" ").replace(/\s+/g, " ").trim(), ...(o || {}) };
+  const body = ["Bonjour,", `Comme convenu, nous vous missionnons pour réaliser ${audit ? "l'audit suivant" : "l'intervention suivante"} :`,
+    `Date : ${frDate(v.date)}`, `Heure : ${heureTxt(v.heure)}`, `Durée : ${v.duree}`, `Tarif : ${tarifTxt(v.tarif)}`, `Adresse : ${adresse}`, `Raison sociale : ${raison}`,
+    "Informations : ", "", ...bullets.map((b) => "* " + b), "",
+    ...(String(v.contact || "").trim() ? [`Contact sur site : ${String(v.contact).trim()}`] : []),
+    ...(cfg.support ? ["Support : ", ...cfg.support.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)] : [])].join("\n");
+  const subject = `Missionnement ${audit ? "audit" : "intervention"} – ${raison}${v.date ? " – " + frDate(v.date) : ""}${v.heure ? " " + heureTxt(v.heure) : ""}`;
+  return { v, body, subject, audit, form, minutes, hasDevis: !!d };
+}
+
+/* ---- fenêtre ---- */
+let MI = null;
+function missionOpen(pid) {
+  const p = (S.production || []).find((x) => x.id === pid); if (!p) return;
+  const dr = missionDraft(p); MI = { pid, edited: false };
+  const tech = (SUIVI().techniciens || []).find((t) => norm(techName(t)) === norm(p.technicien));
+  openModal(`Mail de missionnement – ${p.technicien}`, `<div class="mi">
+    <div class="mi-grid">
+      <label class="field mi-wide"><span>À (e-mail du technicien)${dr.v.to ? "" : ` <small class="warn-txt">· ajoutez son e-mail dans Listes : « ${esc(p.technicien)} &lt;email&gt; »</small>`}</span><input type="text" id="mi-to" inputmode="email" value="${esc(dr.v.to)}"></label>
+      <label class="field mi-wide"><span>Objet</span><input type="text" id="mi-obj" value="${esc(dr.subject)}"></label>
+      <label class="field"><span>Date</span><input type="date" id="mi-date" value="${esc(dr.v.date)}"></label>
+      <label class="field"><span>Heure</span><input type="time" id="mi-heure" value="${esc(dr.v.heure)}" class="${dr.v.heure ? "" : "need"}"></label>
+      <label class="field"><span>Durée ${dr.minutes ? `<small class="muted">· calculée depuis le devis</small>` : `<small class="warn-txt">· à préciser</small>`}</span><input type="text" id="mi-duree" value="${esc(dr.v.duree)}" placeholder="ex. 02h"></label>
+      <label class="field"><span>Tarif technicien (€)</span><input type="text" inputmode="decimal" id="mi-tarif" value="${dr.v.tarif === null || dr.v.tarif === "" ? "" : esc(fmtNum(dr.v.tarif).replace(",00", ""))}"></label>
+      <label class="field mi-wide"><span>Contact sur site <small class="muted">· laisser vide s'il n'y en a pas</small></span><input type="text" id="mi-contact" value="${esc(dr.v.contact)}" placeholder="ex. M. Dupont 06 12 34 56 78"></label>
+    </div>
+    ${dr.hasDevis ? "" : `<p class="warn-txt" style="margin:0">Intervention sans devis lié : complétez les informations dans le texte.</p>`}
+    <label class="field"><span>Mail <small class="muted" id="mi-state">· généré depuis le devis, modifiable</small></span><textarea id="mi-body" rows="18">${esc(dr.body)}</textarea></label>
+    <div class="row mi-actions">
+      <a class="btn primary" id="mi-mail" href="#">Ouvrir dans la messagerie</a>
+      <button class="btn" id="mi-copy" type="button">Copier le texte</button>
+      <button class="btn ghost" id="mi-regen" type="button" hidden>Régénérer depuis le devis</button>
+      <span class="muted" style="font-size:12px">${p.missionEnvoyee ? `Déjà missionné le ${esc(fmtDT(p.missionEnvoyee))}` : ""}</span>
+    </div></div>`);
+  $("modal").querySelector(".modal-card").classList.add("wide");
+  missionLink(); if (!dr.v.heure) $("mi-heure").focus();
+  void tech;
+}
+function missionVals() { return { to: $("mi-to").value.trim(), date: $("mi-date").value, heure: $("mi-heure").value, duree: $("mi-duree").value.trim(), tarif: $("mi-tarif").value.trim(), contact: $("mi-contact").value.trim() }; }
+function missionRefresh() {
+  const p = (S.production || []).find((x) => x.id === MI.pid); if (!p) return; const v = missionVals();
+  $("mi-heure").classList.toggle("need", !v.heure);
+  if (!MI.edited) { const dr = missionDraft(p, { ...v, tarif: v.tarif === "" ? "" : parseNum(v.tarif) }); $("mi-body").value = dr.body; $("mi-obj").value = dr.subject; }
+  missionLink();
+}
+function missionLink() { $("mi-mail").href = `mailto:${encodeURIComponent($("mi-to").value.trim())}?subject=${encodeURIComponent($("mi-obj").value)}&body=${encodeURIComponent($("mi-body").value)}`; }
+async function missionDone(how) {
+  const p = (S.production || []).find((x) => x.id === MI.pid); if (!p) return; const v = missionVals();
+  if (!v.heure) { toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return false; }
+  const tarif = v.tarif === "" ? null : parseNum(v.tarif);
+  const patch = { heure: v.heure, dateIntervention: v.date || p.dateIntervention, duree: v.duree, tarifMission: tarif, contactSite: v.contact, missionEnvoyee: new Date().toISOString(), missionTo: v.to };
+  if ((p.prixAchat === null || p.prixAchat === undefined || p.prixAchat === "") && tarif !== null) patch.prixAchat = tarif;
+  await svSaveProd(MI.pid, patch);
+  toast(how === "copy" ? "Texte copié : collez-le dans votre mail · missionnement noté" : "Mail ouvert dans votre messagerie · missionnement noté");
+  return true;
+}
+function bindMission() {
+  const mb = $("modalBody");
+  mb.addEventListener("input", (e) => {
+    if (!MI || !e.target.id || !e.target.id.startsWith("mi-")) return;
+    if (e.target.id === "mi-body" || e.target.id === "mi-obj") { MI.edited = true; $("mi-regen").hidden = false; $("mi-state").textContent = "· modifié à la main"; missionLink(); return; }
+    missionRefresh();
+  });
+  mb.addEventListener("click", async (e) => {
+    if (!MI) return;
+    if (e.target.id === "mi-regen") { MI.edited = false; $("mi-regen").hidden = true; $("mi-state").textContent = "· généré depuis le devis, modifiable"; missionRefresh(); return; }
+    if (e.target.id === "mi-mail") { if (!$("mi-heure").value) { e.preventDefault(); toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return; } missionLink(); await missionDone("mail"); return; }
+    if (e.target.id === "mi-copy") {
+      if (!$("mi-heure").value) { toast("Renseignez l'heure d'intervention"); $("mi-heure").focus(); return; }
+      const txt = $("mi-body").value; let ok = false;
+      try { await navigator.clipboard.writeText(txt); ok = true; } catch (err) { const t = $("mi-body"); t.select(); try { ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
+      if (ok) await missionDone("copy"); else toast("Copie impossible ici : sélectionnez le texte et copiez-le (Ctrl+C)");
+    }
+  });
+  $("modalClose").addEventListener("click", () => { MI = null; });
+}
+
 
 /* ---------------- views ---------------- */
 function showView(v) {
@@ -3082,7 +3281,7 @@ async function boot() {
   $("btnPdfDo").addEventListener("click", () => makePdf("do"));
   $("btnPdfClient").addEventListener("click", () => makePdf("client"));
   window.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("view-devis").hidden) saveCurrent(false); else if (!$("view-achats").hidden && BC.view === "edit") bcSave(false); } });
-  bindHistory(); bindSuivi(); bindAchats(); bindLecture();
+  bindHistory(); bindSuivi(); bindAchats(); bindLecture(); bindMission();
   $("catalogFile").addEventListener("change", async (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) await importCatalogFile(f); });
 
   if (CRM_CFG) {
