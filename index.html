@@ -2966,16 +2966,16 @@ function lxForfaits(text) {
     const price = +(pm[1].replace(/\D/g, "") + "." + (pm[2] || "0")); if (!(price > 0)) return;
     const half = /demi/.test(dm[2]) || dm[1] === "1/2" || /^0[.,]5$/.test(dm[1] || ""); const q = half ? 0.5 : parseFloat(String(dm[1] || "1").replace(",", "."));
     const dur = half ? "½ journée" : `${qtyStr(q)} journée${q > 1 ? "s" : ""}`; const t = tm ? +tm[1] : 0;
-    const label = `Forfait intervention ${dur}${t ? ` – ${t} technicien${t > 1 ? "s" : ""}` : ""}`;
+    const label = `Forfait main d'œuvre – ${dur}${t ? ` – ${t} technicien${t > 1 ? "s" : ""}` : ""}`;
     const key = [site, label, price].join("|"); if (seen.has(key)) return; seen.add(key);
     out.push({ site, label, price, src: body.trim().replace(/\s+/g, " ") });
   });
   return out;
 }
 function lxForfaitLine(f, items) {
-  // matériel compris : seulement les libellés tels qu'écrits (« 1 x … »), pas ceux devinés dans le texte
+  // forfait de main d'œuvre : le matériel listé (libellés tels qu'écrits, « 1 x … ») est posé, pas fourni
   const inc = items.filter((x) => x.written && x.cat !== "percage" && x.cat !== "cable").map((x) => (x.qty > 1 ? `${x.qty} × ` : "") + x.label);
-  return { on: true, qty: 1, cands: [], sel: -1, pu: f.price, free: f.label + (inc.length ? "\nComprend : " + inc.join(" ; ") : ""), why: `Forfait négocié : « ${f.src} »`, note: "" };
+  return { on: true, qty: 1, cands: [], sel: -1, pu: f.price, free: f.label + (inc.length ? "\nPose et mise en service du matériel fourni par le client (fourniture non comprise) : " + inc.join(" ; ") : "\nFourniture du matériel non comprise"), why: `Forfait négocié : « ${f.src} »`, note: "" };
 }
 function lxExplicit(text, gids) {
   const L = []; const seen = new Set(); const re = /\bUO\s?(\d{1,2}(?:\s?-\s?\d)?)(?:\s?-\s?([a-z]{3,}))?/gi; let m;
@@ -2999,7 +2999,7 @@ function lxBuild(text, doCode) {
   if (flags.audit && !explicit.length) { const a = lxFind(gids, /audit.*wi-?fi/).concat(lxFind(gids, /audit de site/, /wi-?fi|camera|genie/)); if (a.length) sites[0].lines.unshift({ on: false, qty: 1, cands: a, sel: 0, free: "Audit", why: "Audit / visite mentionné", note: "" }); }
   const notes = [];
   if (explicit.length && items.length) notes.push("Prestations demandées explicitement (codes UO) : elles sont cochées ; le matériel listé est proposé décoché, pour un chiffrage ultérieur.");
-  if (fx.length) notes.push(`Forfait${fx.length > 1 ? "s" : ""} négocié${fx.length > 1 ? "s" : ""} repris au prix du texte (${fx.map((f) => money(f.price)).join(" + ")}) ; les prestations du BPU sont proposées décochées, le matériel étant compris dans le forfait.`);
+  if (fx.length) notes.push(`Forfait${fx.length > 1 ? "s" : ""} négocié${fx.length > 1 ? "s" : ""} repris au prix du texte (${fx.map((f) => money(f.price)).join(" + ")}) ; main d'œuvre seule, matériel fourni par le client ; les prestations du BPU sont proposées décochées.`);
   if (flags.cablageExistant) notes.push("Câblage ou prises existants : aucune desserte ajoutée.");
   if (flags.hauteur) notes.push(`Pose indiquée à ${flags.hauteurTxt} : supplément hauteur ajouté pour les bornes (prix à vérifier).`);
   if (flags.exterieur && items.some((x) => x.cat === "borne")) notes.push("Bornes extérieures mentionnées : vérifier la fixation et la hauteur.");
@@ -3156,7 +3156,7 @@ function missionSource(p) {
 function lineMinutes(l, it) {
   const s = lxNorm(`${l.des} ${(it && it.det) || ""}`); const q = Number(l.qt) || 1;
   if (/demi[- ]?journee|(?:1\/2|½) ?journee/.test(s)) return 210 * q;
-  const fj = s.match(/forfait intervention (\d+(?:[.,]\d+)?) journees?/); if (fj) return Math.round(420 * parseFloat(fj[1].replace(",", "."))) * q;
+  const fj = s.match(/forfait (?:intervention|main d.?(?:oe|œ)uvre)\W+(\d+(?:[.,]\d+)?) journees?/); if (fj) return Math.round(420 * parseFloat(fj[1].replace(",", "."))) * q;
   if (/(main d.?oeuvre|technicien)[^.]{0,40}(la journee|par jour)|journee 7 ?h/.test(s)) return 420 * q;
   if (/(main d.?oeuvre|technicien)[^.]{0,40}par heure|heure supplementaire/.test(s)) return 60 * q;
   if (/nacelle|aerial work platform/.test(s)) return 0; // location de matériel, pas du temps de travail
@@ -3180,9 +3180,10 @@ function missionBullets(lines, itemOf) {
   lines.forEach((l) => {
     const it = itemOf(l); const s = lxNorm(`${l.ref} ${l.des} ${(it && it.cat) || ""}`); const q = Number(l.qt) || 1;
     const first = String(l.des).split("\n")[0].replace(/\s*\((par|le|la)\s[^)]*\)/gi, "").replace(/\s+/g, " ").trim();
-    if (isNoise(s)) return;
-    const inc = String(l.des).match(/\n\s*comprend\s*:\s*([\s\S]+)$/i); // forfait négocié : le matériel compris est listé
+    // forfait de main d'œuvre négocié : le matériel à poser est listé dans la ligne
+    const inc = String(l.des).match(/\n\s*(?:comprend|pose et mise en service du mat[ée]riel[^:\n]*)\s*:\s*([\s\S]+)$/i);
     if (inc) { inc[1].split(/\s*[;\n]\s*/).filter(Boolean).forEach((x) => B.push(`Installer et mettre en service : ${x}`)); return; }
+    if (isNoise(s)) return;
     if (/site survey/.test(s) && /starlink|antenna|antenne/.test(s + " " + lxNorm((it && it.det) || ""))) {
       B.push("Repérer l'emplacement de l'antenne souhaité par le client et évaluer les conditions d'installation (accès toiture, hauteur…)");
       B.push("Étudier le cheminement du câble entre l'emplacement de l'antenne et le routeur"); return; }
