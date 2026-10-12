@@ -2884,6 +2884,7 @@ function lxFind(gids, re, not) {
   return out;
 }
 const lxItem = (c) => gridById(c.gid).items[c.idx];
+function lxFindCat(gids, re) { const out = []; gids.forEach((gid) => gridById(gid).items.forEach((it, idx) => { if (re.test(lxNorm(it.cat || ""))) out.push({ gid, idx }); })); return out; }
 function lxPlanSite(items, flags, gids, explicit) {
   const L = []; const on = !explicit;
   const cnt = (c) => items.filter((x) => x.cat === c).reduce((s, x) => s + x.qty, 0);
@@ -2891,7 +2892,8 @@ function lxPlanSite(items, flags, gids, explicit) {
   const add = (qty, cands, whyTxt, note, isOn, free) => { if (qty > 0) L.push({ on: isOn === undefined ? on : isOn, qty, cands, sel: cands.length ? 0 : -1, free: free || whyTxt, why: whyTxt, note: note || "" }); };
   let extUsed = false;
   const extremite = (n, w) => {
-    const main = lxFind(gids, /equipements? d'?extremite/, /suppl/), supp = lxFind(gids, /equipement (additionnel|supplementaire)|extremite.*suppl/);
+    let main = lxFind(gids, /equipements? d'?extremite/, /suppl/); const supp = lxFind(gids, /equipement (additionnel|supplementaire)|extremite.*suppl/);
+    if (!main.length) main = lxFind(gids, /fwa install|cradlepoint/); // grille FWA (ex. Blue Wireless)
     if (!extUsed && main.length) { extUsed = true; add(1, main, w); if (n > 1) add(n - 1, supp.length ? supp : main, w, "Équipements supplémentaires posés le même jour"); }
     else add(n, supp.length ? supp : main, w, extUsed ? "Équipement supplémentaire le même jour" : "");
   };
@@ -2924,7 +2926,11 @@ function lxPlanSite(items, flags, gids, explicit) {
   if (nPC) { const main = lxFind(gids, /poste de travail|installation d'un poste/, /suppl/), supp = lxFind(gids, /poste de travail supplementaire/); add(1, main, why("pc")); add(nPC - 1, supp, why("pc"), "Postes supplémentaires le même jour"); }
   if (nC) { const main = lxFind(gids, /installation video|1 a 3 cameras/, /suppl/), supp = lxFind(gids, /camera supplementaire/); add(1, main, why("camera")); add(Math.max(0, nC - 3), supp, why("camera"), "Au-delà de 3 caméras"); }
   if (nA) { const main = lxFind(gids, /installation alarme de 1 a 5/, /fourniture/), supp = lxFind(gids, /equipement alarme supplementaire/); add(1, main, why("alarme")); add(Math.max(0, nA - 5), supp, why("alarme"), "Au-delà de 5 équipements"); }
-  if (nSt) add(nSt, lxFind(gids, /starlink/, /audit|mat |deplacement|kit|support|cable/), why("starlink"));
+  if (nSt) { // grilles en anglais : la catégorie « Starlink (GML) » porte le mot, on prend le forfait d'installation
+    let c = lxFind(gids, /starlink/, /audit|mat |deplacement|kit|support|cable/);
+    if (!c.length) c = lxFindCat(gids, /starlink/).filter((x) => /standard package|install/.test(lxNorm(lxItem(x).des)));
+    add(nSt, c, why("starlink"));
+  }
   items.filter((x) => x.cat === "pont" || x.cat === "autre").forEach((x) => add(x.qty, [], `${x.qty} × ${x.label}`, "Pas de prestation reconnue : à chiffrer", false, `Installation ${x.label}`));
   const m = cnt("cable");
   if (m) {
@@ -3092,7 +3098,7 @@ function bindLecture() {
 const MISSION_FORMS = [ // portail Couverture-Formulaire : un formulaire par type de prestation
   ["starlink", "Antenne Starlink", /starlink/],
   ["pico-quatra", "PICO BTS / Cel-Fi Quatra", /\bpico\b|quatra|cel-?fi/],
-  ["4g-5g", "Antenne 4G / 5G", /antenne[^.]{0,20}\b(4g|5g)\b|\b(4g|5g)\b[^.]{0,20}antenne/],
+  ["4g-5g", "Antenne 4G / 5G", /antenne[^.]{0,20}\b(4g|5g)\b|\b(4g|5g)\b[^.]{0,20}antenne|\bfwa\b|fixed wireless|cradlepoint/],
   ["camera-alarme", "Caméras & Alarme", /camera|alarme|video/],
   ["cablage-wifi", "Câblage Wi-Fi", /\bbornes?\b|wi-?fi/],
   ["cablage", "Câblage", /./]
@@ -3118,10 +3124,13 @@ function lineMinutes(l, it) {
   if (/demi[- ]?journee|1\/2 journee/.test(s)) return 210 * q;
   if (/(main d.?oeuvre|technicien)[^.]{0,40}(la journee|par jour)|journee 7 ?h/.test(s)) return 420 * q;
   if (/(main d.?oeuvre|technicien)[^.]{0,40}par heure|heure supplementaire/.test(s)) return 60 * q;
-  const m = s.match(/duree(?: estimee)?(?: de)?\s*:?\s*(\d{1,2})\s*h\s*(\d{2})?/) || s.match(/ - (\d{1,2})h(\d{2})? - /);
+  if (/nacelle|aerial work platform/.test(s)) return 0; // location de matériel, pas du temps de travail
+  if (/duration\s*:?\s*full day/.test(s)) return 420 * q;
+  if (/duration\s*:?\s*per hour/.test(s)) return 60 * q;
+  const m = s.match(/duree(?: estimee)?(?: de)?\s*:?\s*(\d{1,2})\s*h\s*(\d{2})?/) || s.match(/duration\s*:?\s*(\d{1,2})\s*hours?()/) || s.match(/ - (\d{1,2})h(\d{2})? - /);
   return m ? +m[1] * 60 + (+m[2] || 0) : 0; // forfait : une fois
 }
-const isAuditLine = (s) => /\baudit\b|visite technique|pre-?visite|\bvt\b|\betude\b|recette/.test(s);
+const isAuditLine = (s) => /\baudit\b|visite technique|pre-?visite|\bvt\b|\betude\b|recette|site survey/.test(s);
 const isNoise = (s) => (/\bdeplacement\b|accessoires de fixation|frais|coordination|chefferie|majoration|supplement delai/.test(s) && !/\bborne/.test(s)) || /main d.?oeuvre|technicien (cableur|referent|assistant)|\bmo-t/.test(s);
 function auditBullets(l, it) {
   const det = String((it && it.det) || "").replace(/\s+/g, " ").trim();
@@ -3134,9 +3143,12 @@ function missionBullets(lines, itemOf) {
   const B = [], agg = {}; const add = (k, n) => { agg[k] = (agg[k] || 0) + n; };
   const meters = (l, s) => { const q = Number(l.qt) || 0; if (/forfait/.test(s)) { const f = s.match(/(\d{2,3})\s*m(?:l|etres?)?\b/); return f ? +f[1] * q : q; } return q; };
   lines.forEach((l) => {
-    const it = itemOf(l); const s = lxNorm(`${l.ref} ${l.des}`); const q = Number(l.qt) || 1;
+    const it = itemOf(l); const s = lxNorm(`${l.ref} ${l.des} ${(it && it.cat) || ""}`); const q = Number(l.qt) || 1;
     const first = String(l.des).split("\n")[0].replace(/\s*\((par|le|la)\s[^)]*\)/gi, "").replace(/\s+/g, " ").trim();
     if (isNoise(s)) return;
+    if (/site survey/.test(s) && /starlink|antenna|antenne/.test(s + " " + lxNorm((it && it.det) || ""))) {
+      B.push("Repérer l'emplacement de l'antenne souhaité par le client et évaluer les conditions d'installation (accès toiture, hauteur…)");
+      B.push("Étudier le cheminement du câble entre l'emplacement de l'antenne et le routeur"); return; }
     if (isAuditLine(s)) { auditBullets(l, it).forEach((b) => B.push(b)); return; }
     if (/supplement[^.]{0,30}(hauteur|plafond)/.test(s) && /borne/.test(s)) { agg.hauteur = true; return; }
     if (/\bbornes?\b/.test(s) && !/dect/.test(s)) { add("borne", q); return; }
@@ -3152,10 +3164,12 @@ function missionBullets(lines, itemOf) {
     if (/tube iro|chemin de cable|cablofil/.test(s)) { B.push(`${first} : ${qtyStr(q)}${/\bml\b|par ml|\bm\b/.test(s) ? " m" : ""}`); return; }
     if (/desserte/.test(s)) { B.push(`Réaliser ${q > 1 ? q + " dessertes" : "la desserte"} (${first.replace(/^.*?desserte\s*/i, "")})`); return; }
     if (/perc(ement|age)|carottage/.test(s)) { B.push(/tous types|forfait/.test(s) ? "Réaliser les percements nécessaires" : `Réaliser ${qtyStr(q)} percement${q > 1 ? "s" : ""} (${first.replace(/^.*?(percement|percage|perçage)\s*/i, "").replace(/^(simple|d'une?|de)\s+/i, "").replace(/\s*:\s*/g, " : ")})`); return; }
-    if (/nacelle/.test(s)) { B.push(`Nacelle prévue : ${first.replace(/^(mise a disposition|mise à disposition|location)\s+(de\s+|d'une?\s+)?/i, "")}${q > 1 ? ` (${qtyStr(q)} jours)` : ""}`); return; }
+    if (/\bmasts?\b|offset arm|\bmat\b|\bbras deport/.test(s)) { B.push(`Poser le support : ${first}${q > 1 ? ` (× ${qtyStr(q)})` : ""}`); return; }
+    if (/nacelle|aerial work platform/.test(s)) { B.push(`Nacelle prévue : ${first.replace(/^(mise a disposition|mise à disposition|location)\s+(de\s+|d'une?\s+)?/i, "")}${q > 1 ? ` (${qtyStr(q)} jours)` : ""}`); return; }
     if (/camera/.test(s)) { add("camera", /1 a 3/.test(s) ? Math.max(1, q) : q); return; }
     if (/alarme/.test(s)) { B.push(`Installer l'alarme : ${first}${q > 1 ? ` (× ${qtyStr(q)})` : ""}`); return; }
-    if (/starlink/.test(s)) { B.push("Installer l'antenne Starlink : fixation, passage du câble, mise en service et test de débit"); return; }
+    if (/starlink/.test(s) && !/second technician|additional|hourly/.test(s)) { B.push("Installer l'antenne Starlink : fixation, passage du câble, mise en service et test de débit"); return; }
+    if (/\bfwa\b|fixed wireless|cradlepoint/.test(s)) { B.push(/troubleshoot/.test(s) ? "Dépanner l'accès FWA : échange de SIM et test des équipements" : "Installer et mettre en service le routeur Cradlepoint (FWA)"); return; }
     B.push(`${first}${q !== 1 ? ` (× ${qtyStr(q)})` : ""}`);
   });
   const top = [];
@@ -3168,14 +3182,14 @@ function missionBullets(lines, itemOf) {
   if (agg.fibre) top.push(`Tirer ${qtyStr(agg.fibre)} m de fibre optique`);
   if (agg.gaine) top.push(`Poser ${qtyStr(agg.gaine)} m de gaine ICTA avec tire-fil`);
   if (agg.goulotte) top.push(`Poser ${qtyStr(agg.goulotte)} m de goulotte`);
-  return [...top, ...B];
+  return [...new Set([...top, ...B])];
 }
 function missionDraft(p, o) {
   const { d, lines, itemOf } = missionSource(p); const cfg = missionCfg();
   const norms = lines.map((l) => lxNorm(`${l.ref} ${l.des}`)).filter((s) => !isNoise(s));
   const audit = norms.length > 0 && norms.every(isAuditLine);
   const minutes = lines.reduce((s, l) => s + lineMinutes(l, itemOf(l)), 0);
-  const all = lxNorm([...lines.map((l) => `${l.ref} ${l.des}`), p.activite].join(" "));
+  const all = lxNorm([...lines.map((l) => `${l.ref} ${l.des} ${(itemOf(l) || {}).cat || ""}`), p.activite].join(" "));
   const form = MISSION_FORMS.find(([, , re]) => re.test(all));
   const c = (d && d.client) || {};
   const adresse = [c.address, c.cpVille].filter(Boolean).join(", ") || p.site || "";
