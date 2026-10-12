@@ -2784,17 +2784,19 @@ const LX_CATS = [
 ];
 const lxCat = (label) => { const n = lxNorm(label); const c = LX_CATS.find(([, re]) => re.test(n)); return c ? c[0] : ""; };
 const LX_UNITS = /^(m|ml|metres?|h|heures?|mn|min|minutes?|km|cm|mm|kg|j|jours?|mois|ans?|semaines?|mbits?|gbits?|go|to|ports?|u|ac|%|euros?|eur|ht|ttc|equipement\(s\)|equipements?)\b/;
+// « Site de Lyon : … », « Pour le site 1 : … », « Matériel site 2 : … »
+const LX_SITE = /^[\s•*\-–]*(?:pour\s+le\s+|mat[ée]riels?\s+(?:du\s+|pour\s+le\s+)?)?site\s+(?:de |d'|d’|du |des )?([^:]{1,40}?)\s*:\s*(.*)$/i;
 
 /* ---- extraction : quantités et matériel, par site ---- */
 function lxItems(text) {
   const lines = text.replace(/\r/g, "").split("\n"); const out = []; let site = "";
   const clean = (t) => t.trim().replace(/\s+/g, " ").replace(/\s+(a|à|dans|pour|avec|sur|chez|jusqu'a|jusqu’à)\s+.*$/i, "").replace(/[.,;:]+$/, "");
-  const push = (qty, label, s, cat, ctx) => { const c = cat || lxCat(label + " " + (ctx || "")); if (qty > 0 && qty < 1000) out.push({ qty, label: clean(label) || label.trim(), cat: c || "autre", site: s }); };
+  const push = (qty, label, s, cat, ctx, written) => { const c = cat || lxCat(label + " " + (ctx || "")); if (qty > 0 && qty < 1000) out.push({ qty, label: clean(label) || label.trim(), cat: c || "autre", site: s, written: !!written }); };
   for (let i = 0; i < lines.length; i++) {
     let raw = lines[i]; const n0 = lxNorm(raw).trim();
     if (!n0 || /^(total|cordialement|bien a vous|from|sent|to|cc|de|a|envoye|objet|subject)\s*:/.test(n0) || /^(total|cordialement|merci|bonjour|bonsoir|salut)\b/.test(n0)) continue;
     // « Site de Lyon : 2 bornes + 2 switch »
-    const sm = raw.match(/^[\s•*\-–]*site\s+(?:de |d'|d’|du |des )?([^:]{1,40}?)\s*:\s*(.*)$/i);
+    const sm = raw.match(LX_SITE);
     let lineSite = ""; if (sm) { site = sm[1].trim(); lineSite = site; raw = sm[2]; }
     // ligne suivante indentée sans quantité = description du matériel (« TP Link Borne WIFI - intérieure »)
     let cont = ""; const nx = lines[i + 1];
@@ -2803,9 +2805,9 @@ function lxItems(text) {
     let explicitFound = false;
     segs.forEach((seg, si) => {
       const ex = seg.match(/(?:^|[^\p{L}\d.,\/])(\d{1,3})\s*[x×*]\s*(\p{L}.*)$/iu); // « 3 x EAP613 », « Matériel : 1 × Pont… »
-      if (ex) { explicitFound = true; push(+ex[1], ex[2], lineSite || site, "", si === segs.length - 1 ? cont : ""); return; }
+      if (ex) { explicitFound = true; push(+ex[1], ex[2], lineSite || site, "", si === segs.length - 1 ? cont : "", true); return; }
       const ex2 = seg.match(/^[^\p{L}\d]*(\p{L}[^()]{1,60}?)\s*\(?\s*[x×]\s*(\d{1,3})\s*\)?\s*$/iu); // « bornes x3 »
-      if (ex2 && lxCat(ex2[1])) { push(+ex2[2], ex2[1], lineSite || site); return; }
+      if (ex2 && lxCat(ex2[1])) { push(+ex2[2], ex2[1], lineSite || site, "", "", true); return; }
       // implicite : « 2 bornes », « une borne », mais pas « 3m », « 2h », « 06 October »
       const s2 = lxNorm(seg).replace(new RegExp(`\\b(${Object.keys(LX_NUM).join("|")})\\s+(?=\\p{L})`, "gu"), (m, w) => LX_NUM[w] + " ");
       const re = /(?:^|[^\d\p{L}\/.,:\-])(\d{1,3})\s+(\p{L}[\p{L}\d' \-\/]{0,50})/gu; let m;
@@ -2817,7 +2819,7 @@ function lxItems(text) {
     if (cm && !explicitFound) push(+cm[1], "m de câble", lineSite || site, "cable");
     const gm = n.match(/(\d{1,4})\s*(?:m|ml|metres?)\b\s*(?:de\s+)?goulottes?/) || n.match(/\bgoulottes?\b[^.\n]{0,20}?(\d{1,4})\s*(?:m|ml|metres?)\b/);
     if (gm) push(+gm[1], "m de goulotte", lineSite || site, "goulotte");
-    if (/\b(percements?|percages?|carottages?)\b/.test(n) && !out.some((x) => x.cat === "percage" && x.site === (lineSite || site))) push(1, "percement", lineSite || site, "percage");
+    if (/\b(percements?|percages?|carottages?)\b/.test(n) && !/\b(pas de|sans|aucun)\s+(percements?|percages?|carottages?)\b/.test(n) && !out.some((x) => x.cat === "percage" && x.site === (lineSite || site))) push(1, "percement", lineSite || site, "percage");
     if (/\bnacelles?\b/.test(n) && !/\b(sans|pas de)\s+nacelle/.test(n) && !out.some((x) => x.cat === "nacelle")) push(1, "nacelle", lineSite || site, "nacelle");
     if (cont) i++;
   }
@@ -2927,7 +2929,9 @@ function lxPlanSite(items, flags, gids, explicit) {
   if (nC) { const main = lxFind(gids, /installation video|1 a 3 cameras/, /suppl/), supp = lxFind(gids, /camera supplementaire/); add(1, main, why("camera")); add(Math.max(0, nC - 3), supp, why("camera"), "Au-delà de 3 caméras"); }
   if (nA) { const main = lxFind(gids, /installation alarme de 1 a 5/, /fourniture/), supp = lxFind(gids, /equipement alarme supplementaire/); add(1, main, why("alarme")); add(Math.max(0, nA - 5), supp, why("alarme"), "Au-delà de 5 équipements"); }
   if (nSt) { // grilles en anglais : la catégorie « Starlink (GML) » porte le mot, on prend le forfait d'installation
-    let c = lxFind(gids, /starlink/, /audit|mat |deplacement|kit|support|cable/);
+    let c = lxFind(gids, /starlink/, /audit|mat |deplacement|kit|support|cable|visite|survey/);
+    const pose = (x) => (/forfait standard|standard package|pose antenne|install/.test(lxNorm(lxItem(x).des)) ? 0 : 1);
+    c = c.sort((a, b) => pose(a) - pose(b));
     if (!c.length) c = lxFindCat(gids, /starlink/).filter((x) => /standard package|install/.test(lxNorm(lxItem(x).des)));
     add(nSt, c, why("starlink"));
   }
@@ -2949,6 +2953,30 @@ function lxPlanSite(items, flags, gids, explicit) {
   if (cnt("nacelle")) add(1, lxFind(gids, /nacelle/), "Nacelle mentionnée");
   return L;
 }
+/* ---- forfaits négociés : « Site A : 1 journée 2 techs à 900€ », « ½ journée, 2 techniciens : 500 € HT » ---- */
+function lxForfaits(text) {
+  const out = []; const seen = new Set(); let site = "";
+  text.replace(/\r/g, "").split("\n").forEach((raw) => {
+    const sm = raw.match(LX_SITE); let body = raw; if (sm) { site = sm[1].trim(); body = sm[2]; }
+    const n = " " + lxNorm(body).replace(/½/g, " 1/2 ").replace(/\b(une?|deux|trois|quatre)\b/g, (w) => LX_NUM[w]) + " ";
+    const dm = n.match(/(?:^|[^\d\/])(?:(\d+(?:[.,]5)?|1\/2)\s*)?\b(demi[- ]?journees?|journees?|jours?)\b/);
+    const tm = n.match(/(\d+)\s*(?:techs?|techniciens?|intervenants?)\b/);
+    const pm = [...n.matchAll(/(?<![\d.,])(\d{1,3}(?:[ .  ]\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(?:€|euros?\b|eur\b)/g)].pop();
+    if (!dm || !pm || !(tm || /\bforfait\b/.test(n))) return;
+    const price = +(pm[1].replace(/\D/g, "") + "." + (pm[2] || "0")); if (!(price > 0)) return;
+    const half = /demi/.test(dm[2]) || dm[1] === "1/2" || /^0[.,]5$/.test(dm[1] || ""); const q = half ? 0.5 : parseFloat(String(dm[1] || "1").replace(",", "."));
+    const dur = half ? "½ journée" : `${qtyStr(q)} journée${q > 1 ? "s" : ""}`; const t = tm ? +tm[1] : 0;
+    const label = `Forfait intervention ${dur}${t ? ` – ${t} technicien${t > 1 ? "s" : ""}` : ""}`;
+    const key = [site, label, price].join("|"); if (seen.has(key)) return; seen.add(key);
+    out.push({ site, label, price, src: body.trim().replace(/\s+/g, " ") });
+  });
+  return out;
+}
+function lxForfaitLine(f, items) {
+  // matériel compris : seulement les libellés tels qu'écrits (« 1 x … »), pas ceux devinés dans le texte
+  const inc = items.filter((x) => x.written && x.cat !== "percage" && x.cat !== "cable").map((x) => (x.qty > 1 ? `${x.qty} × ` : "") + x.label);
+  return { on: true, qty: 1, cands: [], sel: -1, pu: f.price, free: f.label + (inc.length ? "\nComprend : " + inc.join(" ; ") : ""), why: `Forfait négocié : « ${f.src} »`, note: "" };
+}
 function lxExplicit(text, gids) {
   const L = []; const seen = new Set(); const re = /\bUO\s?(\d{1,2}(?:\s?-\s?\d)?)(?:\s?-\s?([a-z]{3,}))?/gi; let m;
   while ((m = re.exec(text))) {
@@ -2961,15 +2989,17 @@ function lxExplicit(text, gids) {
 }
 function lxBuild(text, doCode) {
   const header = lxHeader(text); const flags = lxFlags(text); const gids = lxGridIds(doCode);
-  const items = lxItems(text); const explicit = lxExplicit(text, gids);
-  const names = [...new Set(items.map((x) => x.site).filter(Boolean))];
-  const sites = names.length ? names.map((n) => ({ name: n, items: items.filter((x) => x.site === n) })) : [{ name: "", items }];
-  const common = names.length ? items.filter((x) => !x.site) : [];
-  if (common.length) sites.unshift({ name: "Commun", items: common });
-  sites.forEach((s, i) => { s.lines = [...(i === 0 ? explicit : []), ...lxPlanSite(s.items, flags, gids, explicit.length > 0)]; });
+  const items = lxItems(text); const explicit = lxExplicit(text, gids); const fx = lxForfaits(text);
+  const names = [...new Set([...items, ...fx].map((x) => x.site).filter(Boolean))];
+  const sites = names.length ? names.map((n) => ({ name: n, items: items.filter((x) => x.site === n), fx: fx.filter((f) => f.site === n) })) : [{ name: "", items, fx }];
+  const common = names.length ? items.filter((x) => !x.site) : [], commonFx = names.length ? fx.filter((f) => !f.site) : [];
+  if (common.length || commonFx.length) sites.unshift({ name: "Commun", items: common, fx: commonFx });
+  const priced = explicit.length > 0 || fx.length > 0; // prestations ou forfaits donnés : le matériel listé est proposé décoché
+  sites.forEach((s, i) => { s.lines = [...(i === 0 ? explicit : []), ...s.fx.map((f) => lxForfaitLine(f, s.items)), ...lxPlanSite(s.items, flags, gids, priced)]; });
   if (flags.audit && !explicit.length) { const a = lxFind(gids, /audit.*wi-?fi/).concat(lxFind(gids, /audit de site/, /wi-?fi|camera|genie/)); if (a.length) sites[0].lines.unshift({ on: false, qty: 1, cands: a, sel: 0, free: "Audit", why: "Audit / visite mentionné", note: "" }); }
   const notes = [];
   if (explicit.length && items.length) notes.push("Prestations demandées explicitement (codes UO) : elles sont cochées ; le matériel listé est proposé décoché, pour un chiffrage ultérieur.");
+  if (fx.length) notes.push(`Forfait${fx.length > 1 ? "s" : ""} négocié${fx.length > 1 ? "s" : ""} repris au prix du texte (${fx.map((f) => money(f.price)).join(" + ")}) ; les prestations du BPU sont proposées décochées, le matériel étant compris dans le forfait.`);
   if (flags.cablageExistant) notes.push("Câblage ou prises existants : aucune desserte ajoutée.");
   if (flags.hauteur) notes.push(`Pose indiquée à ${flags.hauteurTxt} : supplément hauteur ajouté pour les bornes (prix à vérifier).`);
   if (flags.exterieur && items.some((x) => x.cat === "borne")) notes.push("Bornes extérieures mentionnées : vérifier la fixation et la hauteur.");
@@ -3004,7 +3034,7 @@ function lxAnalyse(keepHeader) {
 function lxLineHtml(l, si, li) {
   const opts = l.cands.map((c, k) => { const it = lxItem(c); return `<option value="${k}" ${k === l.sel ? "selected" : ""}>${esc(it.ref)} – ${esc(it.des.slice(0, 80))} · ${it.price === null || it.price === undefined ? "prix à saisir" : esc(money(it.price))} (${esc(gridShort(gridById(c.gid)))})</option>`; }).join("")
     + `<option value="-1" ${l.sel === -1 ? "selected" : ""}>Ligne libre : ${esc(l.free.slice(0, 70))}</option>`;
-  const it = l.sel >= 0 ? lxItem(l.cands[l.sel]) : null; const pu = it ? it.price : null;
+  const pu = lxPu(l);
   return `<tr data-s="${si}" data-l="${li}" class="${l.on ? "" : "off"}"><td><input type="checkbox" data-x="on" ${l.on ? "checked" : ""} aria-label="Garder cette ligne"></td>
     <td><input type="text" inputmode="decimal" class="num" data-x="qty" value="${esc(qtyStr(l.qty))}" aria-label="Quantité" style="width:58px;text-align:right"></td>
     <td><select data-x="sel" aria-label="Prestation">${opts}</select><div class="lx-why">${esc(l.why)}${l.note ? ` · <span class="lx-note">${esc(l.note)}</span>` : ""}</div></td>
@@ -3017,7 +3047,7 @@ function lxRender() {
 function lxRenderInner() {
   const p = LX.plan; const h = p.header; const multi = p.sites.filter((s) => s.lines.length).length > 1;
   const fld = (k, label, ph) => `<label class="field"><span>${label}</span><input type="text" id="lx-${k}" value="${esc(h[k] || "")}" placeholder="${esc(ph || "")}"></label>`;
-  const total = p.sites.reduce((s, x) => s + x.lines.filter((l) => l.on && l.sel >= 0).reduce((a, l) => a + (Number(lxItem(l.cands[l.sel]).price) || 0) * l.qty, 0), 0);
+  const total = p.sites.reduce((s, x) => s + x.lines.filter((l) => l.on).reduce((a, l) => a + (Number(lxPu(l)) || 0) * l.qty, 0), 0);
   const nOn = p.sites.reduce((s, x) => s + x.lines.filter((l) => l.on).length, 0);
   const target = S.cur && !S.cur.id && !S.cur.lines.length && !S.cur.client.name ? "Remplir le devis" : "Créer un nouveau devis";
   $("lxOut").innerHTML = `<div class="lx-res">
@@ -3036,8 +3066,12 @@ function lxRenderInner() {
       <button class="btn primary" id="lxApply" type="button" ${nOn || h.client ? "" : "disabled"}>${multi ? "Créer" : target}</button>
     </div></div>`;
 }
+function lxPu(l) { // prix d'une ligne de l'aperçu : celui du BPU, ou celui du texte pour un forfait négocié en ligne libre
+  if (l.sel >= 0) { const it = lxItem(l.cands[l.sel]); return it.price === undefined ? null : it.price; }
+  return l.pu === undefined ? null : l.pu;
+}
 function lxDevisLine(l) {
-  if (l.sel < 0) return { id: uid(), kind: "item", ref: "", des: l.free, pu: null, qt: l.qty, src: "" };
+  if (l.sel < 0) return { id: uid(), kind: "item", ref: "", des: l.free, pu: l.pu ?? null, qt: l.qty, src: "" };
   const c = l.cands[l.sel]; const it = lxItem(c); let des = it.des; if ($("withDetail").checked && it.det) des += "\n" + it.det;
   return { id: uid(), kind: "item", ref: it.ref, des, pu: it.price, qt: l.qty, src: c.gid };
 }
@@ -3121,13 +3155,14 @@ function missionSource(p) {
 }
 function lineMinutes(l, it) {
   const s = lxNorm(`${l.des} ${(it && it.det) || ""}`); const q = Number(l.qt) || 1;
-  if (/demi[- ]?journee|1\/2 journee/.test(s)) return 210 * q;
+  if (/demi[- ]?journee|(?:1\/2|½) ?journee/.test(s)) return 210 * q;
+  const fj = s.match(/forfait intervention (\d+(?:[.,]\d+)?) journees?/); if (fj) return Math.round(420 * parseFloat(fj[1].replace(",", "."))) * q;
   if (/(main d.?oeuvre|technicien)[^.]{0,40}(la journee|par jour)|journee 7 ?h/.test(s)) return 420 * q;
   if (/(main d.?oeuvre|technicien)[^.]{0,40}par heure|heure supplementaire/.test(s)) return 60 * q;
   if (/nacelle|aerial work platform/.test(s)) return 0; // location de matériel, pas du temps de travail
   if (/duration\s*:?\s*full day/.test(s)) return 420 * q;
   if (/duration\s*:?\s*per hour/.test(s)) return 60 * q;
-  const m = s.match(/duree(?: estimee)?(?: de)?\s*:?\s*(\d{1,2})\s*h\s*(\d{2})?/) || s.match(/duration\s*:?\s*(\d{1,2})\s*hours?()/) || s.match(/ - (\d{1,2})h(\d{2})? - /);
+  const m = s.match(/duree(?: estimee)?(?: de)?\s*:?\s*(\d{1,2})\s*h\s*(\d{2})?/) || s.match(/duration\s*:?\s*(\d{1,2})\s*hours?()/) || s.match(/ - (\d{1,2})h(\d{2})? - /) || s.match(/[–-]\s*(\d{1,2})\s*heures?\b()/);
   return m ? +m[1] * 60 + (+m[2] || 0) : 0; // forfait : une fois
 }
 const isAuditLine = (s) => /\baudit\b|visite technique|pre-?visite|\bvt\b|\betude\b|recette|site survey/.test(s);
@@ -3146,6 +3181,8 @@ function missionBullets(lines, itemOf) {
     const it = itemOf(l); const s = lxNorm(`${l.ref} ${l.des} ${(it && it.cat) || ""}`); const q = Number(l.qt) || 1;
     const first = String(l.des).split("\n")[0].replace(/\s*\((par|le|la)\s[^)]*\)/gi, "").replace(/\s+/g, " ").trim();
     if (isNoise(s)) return;
+    const inc = String(l.des).match(/\n\s*comprend\s*:\s*([\s\S]+)$/i); // forfait négocié : le matériel compris est listé
+    if (inc) { inc[1].split(/\s*[;\n]\s*/).filter(Boolean).forEach((x) => B.push(`Installer et mettre en service : ${x}`)); return; }
     if (/site survey/.test(s) && /starlink|antenna|antenne/.test(s + " " + lxNorm((it && it.det) || ""))) {
       B.push("Repérer l'emplacement de l'antenne souhaité par le client et évaluer les conditions d'installation (accès toiture, hauteur…)");
       B.push("Étudier le cheminement du câble entre l'emplacement de l'antenne et le routeur"); return; }
