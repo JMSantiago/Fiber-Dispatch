@@ -4,7 +4,7 @@
 -- Accès réservé au compte équipe (son mot de passe = le code d'accès partagé)
 create or replace function public.is_team()
 returns boolean language sql stable security invoker set search_path = '' as $$
-  select coalesce(auth.jwt() ->> 'email', '') = 'devis.equipe@ipkonekt.com';
+  select coalesce(auth.jwt() ->> 'email', '') = 'devis.equipe@bugbusters.fr';
 $$;
 
 create table public.bpu (
