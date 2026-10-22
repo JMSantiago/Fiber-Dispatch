@@ -1,10 +1,10 @@
--- CRM Devis Bugbusters : structure de la base Supabase (déjà appliquée au projet crm-devis).
+-- CRM Devis IPKONEKT : structure de la base Supabase (déjà appliquée au projet crm-devis).
 -- Référence uniquement : ne contient aucune donnée.
 
 -- Accès réservé au compte équipe (son mot de passe = le code d'accès partagé)
 create or replace function public.is_team()
 returns boolean language sql stable security invoker set search_path = '' as $$
-  select coalesce(auth.jwt() ->> 'email', '') = 'devis.equipe@bugbusters.fr';
+  select coalesce(auth.jwt() ->> 'email', '') = 'devis.equipe@ipkonekt.com';
 $$;
 
 create table public.bpu (
