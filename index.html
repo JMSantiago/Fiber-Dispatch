@@ -648,10 +648,10 @@ table.data.edit .w-t { width: 96px; }
                 <label class="field"><span>N° devis fournisseur</span><input type="text" id="b-refOffre" placeholder="ex. DV46032450"></label>
                 <label class="field"><span>Affaire / chantier</span><input type="text" id="b-affaire" placeholder="ex. UNIVI FAIENCERIE"></label>
                 <label class="field"><span>Devis DO lié <small class="muted">(facultatif)</small></span><input type="text" id="b-devis" list="bcDevisList" placeholder="N° de devis ou nom du client" autocomplete="off"></label>
-                <label class="field"><span>Livraison</span><select id="b-livMode"><option value="societe">Livraison à notre adresse</option><option value="chantier">Livraison sur le chantier</option><option value="enlevement">Enlèvement en agence</option></select></label>
+                <label class="field"><span>Livraison</span><select id="b-livMode"><option value="societe">Livraison à notre adresse</option><option value="chantier">Livraison sur le chantier</option><option value="retrait">Livraison sur point de retrait</option><option value="domicile">Livraison au domicile</option><option value="autre">Livraison sur adresse de son choix</option></select></label>
                 <p class="muted liv-hint" id="b-livHint"></p>
                 <div class="stack" id="b-livAddr">
-                  <label class="field"><span>Nom / site de livraison</span><input type="text" id="b-livNom"></label>
+                  <label class="field"><span id="b-livNomLabel">Nom / site de livraison</span><input type="text" id="b-livNom"></label>
                   <label class="field"><span>Adresse de livraison</span><input type="text" id="b-livAdresse"></label>
                   <div class="grid2 tight">
                     <label class="field"><span>Code postal et ville</span><input type="text" id="b-livCpVille"></label>
@@ -2273,6 +2273,15 @@ const fournByName = (nom) => { const n = norm(String(nom || "").trim()); return 
 const fournById = (id) => BC.fourn.find((f) => f.id === id) || null;
 const puTxt = (pu, pour) => (pu === null || pu === undefined ? "" : money(pu) + (Number(pour) > 1 ? ` /${pour}` : ""));
 
+/* Types de livraison. L'ancien « Enlèvement en agence » est repris en « Livraison sur point de retrait » (adresse de l'agence). */
+const BC_LIV = {
+  societe: { titre: "ADRESSE DE LIVRAISON", nom: "Nom / site de livraison", aide: "Adresse mémorisée : modifiez-la une fois, elle sera reprise sur les prochains bons." },
+  chantier: { titre: "LIVRAISON SUR LE CHANTIER", nom: "Nom / site de livraison", aide: "" },
+  retrait: { titre: "LIVRAISON SUR POINT DE RETRAIT", nom: "Nom du point de retrait", aide: "Indiquez le point de retrait : agence, point relais, consigne…" },
+  domicile: { titre: "LIVRAISON AU DOMICILE", nom: "Nom de la personne", aide: "Indiquez le nom et l'adresse de la personne qui reçoit la livraison." },
+  autre: { titre: "ADRESSE DE LIVRAISON", nom: "Nom / destinataire", aide: "Indiquez l'adresse de livraison de votre choix." }
+};
+const bcLivType = (mode) => BC_LIV[mode] || BC_LIV.societe;
 function bcLivDefaut() {
   const l = BC.cfg.livraison || {};
   return { nom: l.nom || S.company.name || "", adresse: l.adresse ?? S.company.addr1 ?? "", cpVille: l.cpVille ?? S.company.addr2 ?? "", contact: l.contact || "" };
@@ -2289,6 +2298,8 @@ function blankBc() {
 function normalizeBc(b) {
   const z = blankBc();
   const out = { ...z, ...b, fournisseur: { ...z.fournisseur, ...(b.fournisseur || {}) }, livraison: { ...z.livraison, ...(b.livraison || {}) } };
+  if (out.livraison.mode === "enlevement") { const f = out.fournisseur; out.livraison = { mode: "retrait", nom: f.agence ? `${f.nom} – agence ${f.agence}` : f.nom, adresse: f.adresse, cpVille: f.cpVille, contact: out.livraison.contact || "" }; }
+  if (!BC_LIV[out.livraison.mode]) out.livraison.mode = "autre";
   out.lines = (b.lines || []).map((l) => ({ id: l.id || uid(), kind: l.kind || "item", ref: l.ref || "", des: l.des || "", qt: l.qt ?? 1, unite: l.unite || "", pu: l.pu ?? null, pour: Number(l.pour) || 1 }));
   return out;
 }
@@ -2325,8 +2336,8 @@ function loadBcForm() {
   $("b-status").value = b.status || "brouillon"; $("b-tva").value = b.tva; $("b-livMode").value = b.livraison.mode || "societe";
   const d = b.devisId ? S.devis.find((x) => x.id === b.devisId) : null;
   $("b-devis").value = d ? devisLabel(d) : (b.devisNum || "");
-  $("b-livAddr").hidden = b.livraison.mode === "enlevement";
-  $("b-livHint").textContent = b.livraison.mode === "enlevement" ? `Le bon indiquera un enlèvement à l'agence ${b.fournisseur.agence || b.fournisseur.nom || "du fournisseur"}.` : b.livraison.mode === "societe" ? "Adresse mémorisée : modifiez-la une fois, elle sera reprise sur les prochains bons." : "";
+  $("b-livAddr").hidden = false; $("b-livNomLabel").textContent = bcLivType(b.livraison.mode).nom;
+  $("b-livHint").textContent = bcLivType(b.livraison.mode).aide;
   renderBcHead(); renderBcLines(); renderBcCatalog();
 }
 function renderBcHead() {
@@ -2380,8 +2391,9 @@ function bcSetLivMode(mode) {
   else if (mode === "chantier") {
     const d = b.devisId ? S.devis.find((x) => x.id === b.devisId) : null; const c = (d && d.client) || {};
     b.livraison = prev.mode === "chantier" ? prev : { mode, nom: c.name || b.affaire || "", adresse: c.address || "", cpVille: c.cpVille || "", contact: "" };
-  } else b.livraison = { mode, nom: "", adresse: "", cpVille: "", contact: "" };
+  } else b.livraison = ["retrait", "domicile", "autre"].includes(prev.mode) ? { ...prev, mode } : { mode, nom: "", adresse: "", cpVille: "", contact: "" };
   loadBcForm(); bcMarkDirty();
+  if (mode !== "societe" && !b.livraison.nom) $("b-livNom").focus();
 }
 
 /* ---- lignes ---- */
@@ -2511,14 +2523,14 @@ function buildBcPdfDoc(b, company, logo) {
 
   // fournisseur et livraison
   const fournLines = [f.nom, f.agence && norm(f.agence) !== norm(f.nom) ? "Agence " + f.agence : "", f.adresse, f.cpVille, f.contact ? "À l'attention de " + f.contact : "", [f.tel, f.email].filter(Boolean).join(" · ")];
-  const livLines = liv.mode === "enlevement" ? ["Enlèvement en agence", f.agence || f.nom, f.adresse, f.cpVille] : [liv.nom, liv.adresse, liv.cpVille, liv.contact ? "Contact sur place : " + liv.contact : ""];
+  const livLines = [liv.nom, liv.adresse, liv.cpVille, liv.contact ? (liv.mode === "domicile" ? "Téléphone : " : "Contact sur place : ") + liv.contact : ""];
 
   // références de la commande (une seule ligne, colonnes présentes seulement si remplies)
   const refs = [];
   if (b.refOffre) refs.push(["N° DEVIS FOURNISSEUR", b.refOffre]);
   if (f.numClient) refs.push(["NOTRE N° CLIENT", f.numClient]);
   if (b.affaire) refs.push(["AFFAIRE / CHANTIER", b.affaire]);
-  if (b.dateLivraison) refs.push([liv.mode === "enlevement" ? "ENLÈVEMENT SOUHAITÉ LE" : "LIVRAISON SOUHAITÉE LE", fd(b.dateLivraison)]);
+  if (b.dateLivraison) refs.push(["LIVRAISON SOUHAITÉE LE", fd(b.dateLivraison)]);
   if (b.auteur) refs.push(["COMMANDÉ PAR", b.auteur]);
   let refW = refs.map((r) => (r[0] === "AFFAIRE / CHANTIER" ? "*" : "auto")); if (!refW.includes("*")) refW = refs.map(() => "*");
   const refTable = refs.length ? { table: { widths: refW, body: [refs.map((r) => lab(r[0])), refs.map((r) => ({ text: r[1], fontSize: 9.5, bold: true }))] }, layout: box, margin: [0, 12, 0, 0] } : null;
@@ -2555,7 +2567,7 @@ function buildBcPdfDoc(b, company, logo) {
       { text: `Bon de commande ${num} · page ${page} / ${pages}`, fontSize: 6.8, alignment: "right", color: C.grey, margin: [0, 2, 0, 0] }] }),
     content: [
       { columns: [left, right], columnGap: 16 },
-      { columns: [panel("FOURNISSEUR", fournLines), panel(liv.mode === "enlevement" ? "ENLÈVEMENT" : "ADRESSE DE LIVRAISON", livLines)], columnGap: 14, margin: [0, 18, 0, 0] },
+      { columns: [panel("FOURNISSEUR", fournLines), panel(bcLivType(liv.mode).titre, livLines)], columnGap: 14, margin: [0, 18, 0, 0] },
       refTable,
       { table: { headerRows: 1, dontBreakRows: true, widths: [62, "*", 32, 34, 66, 70], body }, layout: lignes, margin: [0, 14, 0, 0] },
       { columns: [{ width: "*", table: { widths: ["*"], body: [[lab("CONDITIONS")], [{ stack: remarks, margin: [0, 2, 0, 2] }]] }, layout: box }, { width: 200, ...totals }], columnGap: 14, margin: [0, 14, 0, 0], unbreakable: true },
