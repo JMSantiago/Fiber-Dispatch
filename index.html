@@ -642,9 +642,10 @@ table.data.edit .w-t { width: 96px; }
               <h2>Commande <small>affaire et livraison</small></h2>
               <div class="stack">
                 <div class="grid2 tight">
+                  <label class="field"><span>N° de commande</span><input type="text" id="b-num" placeholder="Votre n° de commande" autocomplete="off"><small class="muted" id="b-numHint" style="font-size:12px"></small></label>
                   <label class="field"><span>Date de commande</span><input type="date" id="b-date"></label>
-                  <label class="field"><span>Réf. offre / devis fournisseur</span><input type="text" id="b-refOffre" placeholder="ex. DV46032450"></label>
                 </div>
+                <label class="field"><span>N° devis fournisseur</span><input type="text" id="b-refOffre" placeholder="ex. DV46032450"></label>
                 <label class="field"><span>Affaire / chantier</span><input type="text" id="b-affaire" placeholder="ex. UNIVI FAIENCERIE"></label>
                 <label class="field"><span>Devis DO lié <small class="muted">(facultatif)</small></span><input type="text" id="b-devis" list="bcDevisList" placeholder="N° de devis ou nom du client" autocomplete="off"></label>
                 <label class="field"><span>Livraison</span><select id="b-livMode"><option value="societe">Livraison à notre adresse</option><option value="chantier">Livraison sur le chantier</option><option value="enlevement">Enlèvement en agence</option></select></label>
@@ -702,7 +703,7 @@ table.data.edit .w-t { width: 96px; }
 
     <div id="ac-liste" hidden>
       <div class="toolbar sv-filters">
-        <input type="search" id="bclSearch" placeholder="Chercher un n°, un fournisseur, une affaire, un article…" style="max-width:320px">
+        <input type="search" id="bclSearch" placeholder="Chercher un n°, un fournisseur, une affaire…" style="max-width:320px">
         <select id="bclFourn" style="width:auto;max-width:220px" aria-label="Fournisseur"></select>
         <select id="bclStatus" style="width:auto" aria-label="Statut">
           <option value="">Tous les statuts</option><option value="brouillon">Brouillon</option><option value="commande">Commandé</option><option value="partiel">Livré en partie</option><option value="recu">Livré</option><option value="annule">Annulé</option><option value="__trash">Corbeille</option>
@@ -2291,17 +2292,26 @@ function normalizeBc(b) {
   out.lines = (b.lines || []).map((l) => ({ id: l.id || uid(), kind: l.kind || "item", ref: l.ref || "", des: l.des || "", qt: l.qt ?? 1, unite: l.unite || "", pu: l.pu ?? null, pour: Number(l.pour) || 1 }));
   return out;
 }
-function bcNextNumber() {
-  const ym = todayISO().slice(2, 7).replace("-", ""); const re = new RegExp("^BC-" + ym + "-(\\d+)$");
-  let max = 0; [...BC.nums, ...BC.list.map((b) => b.num)].forEach((n) => { const m = re.exec(n || ""); if (m) max = Math.max(max, +m[1]); });
-  return `BC-${ym}-${String(max + 1).padStart(3, "0")}`;
+/* N° de commande : saisi par l'utilisateur (plus de numérotation automatique) */
+const bcNumKey = (n) => norm(String(n || "")).replace(/\s+/g, "");
+const bcLabel = (b) => (b && String(b.num || "").trim()) || "sans n°";
+function bcNumTaken(b) { const k = bcNumKey(b && b.num); return k ? BC.list.find((x) => x.id !== b.id && bcNumKey(x.num) === k) || null : null; }
+function renderBcNumHint() {
+  const b = BC.cur; const el = $("b-numHint"); if (!b || !el) return;
+  const other = bcNumTaken(b);
+  if (other) { el.className = "warn-txt"; el.textContent = `Déjà utilisé : bon du ${frDate(other.date)}${other.fournisseur && other.fournisseur.nom ? " chez " + other.fournisseur.nom : ""}`; return; }
+  if (!String(b.num || "").trim()) {
+    const last = BC.list.filter((x) => x.id !== b.id && String(x.num || "").trim()).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0];
+    el.className = "muted"; el.textContent = "Obligatoire pour le PDF" + (last ? ` · dernier n° : ${last.num}` : ""); return;
+  }
+  el.className = "muted"; el.textContent = "";
 }
 
 /* ---- éditeur ---- */
 const BF = { // champ → chemin dans le bon de commande
   "b-agence": ["fournisseur", "agence"], "b-adresse": ["fournisseur", "adresse"], "b-cpVille": ["fournisseur", "cpVille"], "b-contact": ["fournisseur", "contact"],
   "b-tel": ["fournisseur", "tel"], "b-email": ["fournisseur", "email"], "b-numClient": ["fournisseur", "numClient"],
-  "b-date": ["date"], "b-refOffre": ["refOffre"], "b-affaire": ["affaire"], "b-dateLiv": ["dateLivraison"], "b-notes": ["notes"],
+  "b-num": ["num"], "b-date": ["date"], "b-refOffre": ["refOffre"], "b-affaire": ["affaire"], "b-dateLiv": ["dateLivraison"], "b-notes": ["notes"],
   "b-livNom": ["livraison", "nom"], "b-livAdresse": ["livraison", "adresse"], "b-livCpVille": ["livraison", "cpVille"], "b-livContact": ["livraison", "contact"]
 };
 const bcGet = (path) => path.reduce((o, k) => (o ? o[k] : ""), BC.cur);
@@ -2321,7 +2331,8 @@ function loadBcForm() {
 }
 function renderBcHead() {
   const b = BC.cur; if (!b) return;
-  $("bcNum").innerHTML = b.num ? `Bon de commande <em>${esc(b.num)}</em>` : "Nouveau bon de commande";
+  $("bcNum").innerHTML = String(b.num || "").trim() ? `Bon de commande <em>${esc(b.num)}</em>` : b.id ? `Bon de commande <em>sans n°</em>` : "Nouveau bon de commande";
+  renderBcNumHint();
   const st = $("bcSaveState");
   if (S.readOnly) { st.textContent = "Lecture seule"; st.className = "save-state"; }
   else if (!BC.ready) { st.textContent = "Connexion à l'enregistrement…"; st.className = "save-state"; }
@@ -2442,8 +2453,8 @@ async function bcSave(silent) {
   clearTimeout(bcAutosaveT);
   const b = BC.cur;
   if (!b.fournisseur.nom.trim()) { if (!silent) { toast("Choisissez ou saisissez un fournisseur"); $("b-fourn").focus(); } return false; }
-  if (!b.id) { b.id = uid(); b.num = bcNextNumber(); b.createdAt = Date.now(); }
-  b.updatedAt = Date.now(); b.auteur = b.auteur || Store.author || "";
+  if (!b.id) { b.id = uid(); b.createdAt = Date.now(); }
+  b.num = String(b.num || "").trim(); b.updatedAt = Date.now(); b.auteur = b.auteur || Store.author || "";
   const known = fournById(b.fournisseurId) || fournByName(b.fournisseur.nom);
   b.fournisseurId = known ? known.id : fournSlug(b.fournisseur.nom);
   const data = JSON.parse(JSON.stringify(b)); delete data.updatedBy;
@@ -2453,8 +2464,9 @@ async function bcSave(silent) {
   const f = known || { id: b.fournisseurId, nom: b.fournisseur.nom, articles: [], notes: "" };
   const merged = { ...f }; let changed = !known;
   FOURN_FIELDS.forEach((k) => { const v = String(b.fournisseur[k] || "").trim(); if (v && v !== (f[k] || "")) { merged[k] = v; changed = true; } });
-  if (changed) { const ok = await Store.saveFournisseur(merged); if (ok && !known && !silent) toast(`Bon ${b.num} enregistré · fournisseur ${merged.nom} ajouté`); else if (!silent) toast(`Bon ${b.num} enregistré`); }
-  else if (!silent) toast(`Bon ${b.num} enregistré`);
+  if (changed) { const ok = await Store.saveFournisseur(merged); if (ok && !known && !silent) toast(`Bon ${bcLabel(b)} enregistré · fournisseur ${merged.nom} ajouté`); else if (!silent) toast(`Bon ${bcLabel(b)} enregistré`); }
+  else if (!silent) toast(`Bon ${bcLabel(b)} enregistré`);
+  if (!silent && bcNumTaken(b)) toast(`Attention : le n° ${b.num} est déjà utilisé par un autre bon`);
   // adresse de livraison « chez nous » mémorisée
   if (b.livraison.mode === "societe") {
     const cur = BC.cfg.livraison || {}; const nv = { nom: b.livraison.nom, adresse: b.livraison.adresse, cpVille: b.livraison.cpVille, contact: b.livraison.contact };
@@ -2478,55 +2490,77 @@ function bcDuplicate(src) {
   const b = normalizeBc(JSON.parse(JSON.stringify(src)));
   Object.assign(b, { id: null, num: "", status: "brouillon", createdAt: null, updatedAt: null, date: todayISO(), refOffre: "", dateLivraison: "", auteur: "" });
   b.lines.forEach((l) => { l.id = uid(); });
-  BC.cur = b; BC.dirty = true; achatsGo("edit"); loadBcForm(); toast("Copie créée : enregistrez-la pour lui donner un numéro");
+  BC.cur = b; BC.dirty = true; achatsGo("edit"); loadBcForm(); $("b-num").focus(); toast("Copie créée : saisissez son n° de commande, puis enregistrez");
 }
 
 /* ---- PDF ---- */
 function buildBcPdfDoc(b, company, logo) {
-  const C = { teal: "#044E67", line: "#2E4E4E", text: "#1B1B1B" };
+  const C = { teal: "#044E67", soft: "#EAF2F4", zebra: "#F5F8F9", line: "#C5D3D8", text: "#1B1B1B", grey: "#5F6B70" };
   const t = bcTotals(b); const f = b.fournisseur; const liv = b.livraison;
-  const m = (n) => fmtNum(n) + " €"; const fd = (iso) => frDate(iso);
-  const addrBlock = (title, lines) => ({ stack: [{ text: title, color: C.teal, decoration: "underline", fontSize: 9, margin: [0, 0, 0, 6] }].concat(lines.filter(Boolean).map((x, i) => ({ text: x, fontSize: i === 0 ? 9.5 : 9, bold: i === 0 }))) });
-  const fournLines = [f.nom, f.agence && norm(f.agence) !== norm(f.nom) ? f.agence : "", f.adresse, f.cpVille, f.contact ? "À l'attention de " + f.contact : "", [f.tel, f.email].filter(Boolean).join(" · ")];
+  const m = (n) => fmtNum(n) + " €"; const fd = (iso) => frDate(iso); const num = String(b.num || "").trim();
+  const box = { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.line, vLineColor: () => C.line, paddingLeft: () => 7, paddingRight: () => 7, paddingTop: () => 4, paddingBottom: () => 4 };
+  const lab = (x, extra) => ({ text: x, bold: true, fontSize: 7.5, color: C.teal, fillColor: C.soft, ...(extra || {}) });
+  const panel = (title, lines) => ({ table: { widths: ["*"], body: [[lab(title)], [{ stack: lines.filter((x) => String(x || "").trim()).map((x, i) => ({ text: x, fontSize: i === 0 ? 10 : 9, bold: i === 0, margin: [0, i ? 1.5 : 0, 0, 0] })), margin: [0, 2, 0, 2] }]] }, layout: box });
+
+  // en-tête : société à gauche, titre + n° + date à droite
+  const soc = { stack: [{ text: company.name || "", bold: true, fontSize: 13, color: C.teal }, { text: company.addr1 || "", fontSize: 9, margin: [0, 4, 0, 0] }, { text: company.addr2 || "", fontSize: 9 }], margin: [0, 4, 0, 0] };
+  const left = logo ? { width: "*", columns: [{ image: logo, fit: [62, 62], width: 66 }, { width: "*", ...soc }], columnGap: 10 } : { width: "*", ...soc };
+  const right = { width: 215, stack: [
+    { text: "BON DE COMMANDE", bold: true, fontSize: 17, color: C.teal, alignment: "right" },
+    { table: { widths: [92, "*"], body: [[lab("N° DE COMMANDE"), { text: num, bold: true, fontSize: 11, alignment: "right" }], [lab("DATE"), { text: fd(b.date), alignment: "right" }]] }, layout: box, margin: [0, 8, 0, 0] }] };
+
+  // fournisseur et livraison
+  const fournLines = [f.nom, f.agence && norm(f.agence) !== norm(f.nom) ? "Agence " + f.agence : "", f.adresse, f.cpVille, f.contact ? "À l'attention de " + f.contact : "", [f.tel, f.email].filter(Boolean).join(" · ")];
   const livLines = liv.mode === "enlevement" ? ["Enlèvement en agence", f.agence || f.nom, f.adresse, f.cpVille] : [liv.nom, liv.adresse, liv.cpVille, liv.contact ? "Contact sur place : " + liv.contact : ""];
-  const lab = (x) => ({ text: x, bold: true, color: C.teal, fontSize: 9 }); const val = (x) => ({ text: x || "", fontSize: 9 });
-  const info = [[lab("N° DE COMMANDE"), val(b.num)], [lab("DATE DE COMMANDE"), val(fd(b.date))]];
-  if (b.refOffre) info.push([lab("VOTRE OFFRE / DEVIS N°"), val(b.refOffre)]);
-  if (f.numClient) info.push([lab("NOTRE N° CLIENT"), val(f.numClient)]);
-  if (b.affaire) info.push([lab("AFFAIRE / CHANTIER"), val(b.affaire)]);
-  if (b.dateLivraison) info.push([lab(liv.mode === "enlevement" ? "ENLÈVEMENT SOUHAITÉ LE" : "LIVRAISON SOUHAITÉE LE"), val(fd(b.dateLivraison))]);
-  if (b.auteur) info.push([lab("COMMANDÉ PAR"), val(b.auteur)]);
-  const th = (x, al) => ({ text: x, bold: true, color: C.teal, fontSize: 8.5, alignment: al || "center", margin: [0, 3, 0, 3] });
-  const body = [[th("RÉFÉRENCE"), th("DÉSIGNATION"), th("QTÉ"), th("UNITÉ"), th("PU NET H.T."), th("MONTANT H.T.")]];
+
+  // références de la commande (une seule ligne, colonnes présentes seulement si remplies)
+  const refs = [];
+  if (b.refOffre) refs.push(["N° DEVIS FOURNISSEUR", b.refOffre]);
+  if (f.numClient) refs.push(["NOTRE N° CLIENT", f.numClient]);
+  if (b.affaire) refs.push(["AFFAIRE / CHANTIER", b.affaire]);
+  if (b.dateLivraison) refs.push([liv.mode === "enlevement" ? "ENLÈVEMENT SOUHAITÉ LE" : "LIVRAISON SOUHAITÉE LE", fd(b.dateLivraison)]);
+  if (b.auteur) refs.push(["COMMANDÉ PAR", b.auteur]);
+  let refW = refs.map((r) => (r[0] === "AFFAIRE / CHANTIER" ? "*" : "auto")); if (!refW.includes("*")) refW = refs.map(() => "*");
+  const refTable = refs.length ? { table: { widths: refW, body: [refs.map((r) => lab(r[0])), refs.map((r) => ({ text: r[1], fontSize: 9.5, bold: true }))] }, layout: box, margin: [0, 12, 0, 0] } : null;
+
+  // articles
+  const th = (x, al) => ({ text: x, bold: true, fontSize: 7.5, color: "#FFFFFF", alignment: al || "center" });
+  const body = [[th("RÉFÉRENCE"), th("DÉSIGNATION", "left"), th("QTÉ"), th("UNITÉ"), th("PU NET H.T.", "right"), th("MONTANT H.T.", "right")]];
   (b.lines || []).forEach((l) => {
-    if (l.kind === "text") body.push([{ text: "" }, { text: l.des || "", fontSize: 8.5, italics: true, colSpan: 5 }, {}, {}, {}, {}]);
+    if (l.kind === "text") body.push([{ text: "" }, { text: l.des || "", fontSize: 8.5, italics: true, color: C.grey, colSpan: 5 }, {}, {}, {}, {}]);
     else body.push([{ text: l.ref || "", fontSize: 8, alignment: "center" }, { text: l.des || "", fontSize: 8.5 }, { text: qtyStr(l.qt), fontSize: 8.5, alignment: "center" },
       { text: l.unite || "", fontSize: 8, alignment: "center" }, { text: puTxt(l.pu, l.pour), fontSize: 8.5, alignment: "right" }, { text: m(bcLineTotal(l)), fontSize: 8.5, alignment: "right" }]);
   });
-  if (body.length === 1) body.push([{ text: "" }, { text: "" }, { text: "" }, { text: "" }, { text: "" }, { text: "" }]);
-  const grid = { hLineColor: () => C.line, vLineColor: () => C.line, hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingTop: () => 3, paddingBottom: () => 3 };
-  const headLeft = { stack: [{ text: company.name || "", bold: true, fontSize: 15, color: C.teal }, { text: company.addr1 || "", fontSize: 11, color: C.teal, margin: [0, 6, 0, 0] }, { text: company.addr2 || "", fontSize: 11, color: C.teal }] };
-  const head = logo ? { columns: [headLeft, { image: logo, fit: [78, 78], alignment: "right", width: 90 }], columnGap: 10 } : headLeft;
-  const remarks = [b.notes, `Merci de rappeler le n° de commande ${b.num} sur l'accusé de réception, le bon de livraison et la facture.`,
-    `Facturation : ${[company.name, company.addr1, company.addr2].filter(Boolean).join(", ")}.`].filter((x) => String(x || "").trim());
+  if (body.length === 1) body.push([{ text: "" }, { text: "Aucun article", italics: true, color: C.grey }, { text: "" }, { text: "" }, { text: "" }, { text: "" }]);
+  const lignes = { hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 0.8 : 0.4), vLineWidth: () => 0, hLineColor: (i) => (i <= 1 ? C.teal : C.line),
+    fillColor: (row) => (row === 0 ? C.teal : row % 2 === 0 ? C.zebra : null), paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 4, paddingBottom: () => 4 };
+
+  // conditions à gauche, totaux à droite
+  const remarks = [b.notes ? { text: b.notes, bold: true, fontSize: 8.5, margin: [0, 0, 0, 4] } : null,
+    { text: `Merci de rappeler notre n° de commande ${num} sur l'accusé de réception, le bon de livraison et la facture.`, fontSize: 8 },
+    { text: `Facturation : ${[company.name, company.addr1, company.addr2].filter(Boolean).join(", ")}.`, fontSize: 8, margin: [0, 2, 0, 0] }].filter(Boolean);
+  const totals = { table: { widths: ["*", 82], body: [
+    [{ text: "Total H.T.", fontSize: 9 }, { text: m(t.ht), fontSize: 9, alignment: "right" }],
+    [{ text: "TVA " + String(b.tva).replace(".", ",") + " %", fontSize: 9 }, { text: m(t.tva), fontSize: 9, alignment: "right" }],
+    [{ text: "TOTAL T.T.C.", bold: true, fontSize: 10, color: "#FFFFFF", fillColor: C.teal }, { text: m(t.ttc), bold: true, fontSize: 10, color: "#FFFFFF", fillColor: C.teal, alignment: "right" }]] }, layout: box };
+
   return {
-    pageSize: "A4", pageMargins: [36, 36, 36, 60],
-    info: { title: "Bon de commande " + (b.num || ""), author: company.name || "", subject: f.nom || "" },
+    pageSize: "A4", pageMargins: [36, 36, 36, 62],
+    info: { title: "Bon de commande " + num, author: company.name || "", subject: f.nom || "" },
     defaultStyle: { font: "Roboto", fontSize: 9, color: C.text },
-    footer: (page, pages) => ({ margin: [36, 6, 36, 0], stack: [
-      { text: company.foot1 || "", fontSize: 7, alignment: "center" }, { text: company.foot2 || "", fontSize: 7, alignment: "center", margin: [0, 2, 0, 0] },
-      { text: pages > 1 ? "Page " + page + " / " + pages : "", fontSize: 7, alignment: "right", color: "#666666", margin: [0, 2, 0, 0] }] }),
+    footer: (page, pages) => ({ margin: [36, 8, 36, 0], stack: [
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 523, y2: 0, lineWidth: 0.5, lineColor: C.line }] },
+      { text: company.foot1 || "", fontSize: 6.8, alignment: "center", color: C.grey, margin: [0, 4, 0, 0] },
+      { text: company.foot2 || "", fontSize: 6.8, alignment: "center", color: C.grey, margin: [0, 1, 0, 0] },
+      { text: `Bon de commande ${num} · page ${page} / ${pages}`, fontSize: 6.8, alignment: "right", color: C.grey, margin: [0, 2, 0, 0] }] }),
     content: [
-      head,
-      { columns: [addrBlock("FOURNISSEUR :", fournLines), addrBlock(liv.mode === "enlevement" ? "ENLÈVEMENT :" : "Adresse de LIVRAISON :", livLines)], columnGap: 40, margin: [0, 18, 0, 0] },
-      { text: "BON DE COMMANDE", bold: true, fontSize: 22, color: C.teal, margin: [0, 18, 0, 6] },
-      { table: { widths: [150, "*"], body: info }, layout: grid },
-      { table: { headerRows: 1, dontBreakRows: true, widths: [72, "*", 34, 36, 72, 72], body }, layout: grid, margin: [0, 12, 0, 0] },
-      { columns: [{ width: "*", text: "" }, { width: "auto", table: { widths: [86, 86, 86], body: [[th("TOTAL H.T."), th("TVA " + String(b.tva).replace(".", ",") + " %"), th("TOTAL T.T.C.")], [
-        { text: m(t.ht), alignment: "right" }, { text: m(t.tva), alignment: "right" }, { text: m(t.ttc), alignment: "right", bold: true }]] }, layout: grid }], margin: [0, 12, 0, 0], unbreakable: true },
-      { table: { widths: ["*"], body: [[{ stack: remarks.map((r) => ({ text: r, fontSize: 8.5, color: C.teal, bold: true, margin: [0, 1, 0, 1] })), margin: [8, 5, 8, 5] }]] }, layout: grid, margin: [0, 14, 0, 0], unbreakable: true },
-      { columns: [{ width: "*", text: "" }, { width: 220, stack: [{ text: "Bon pour commande", bold: true, color: C.teal, fontSize: 10, alignment: "center" }, { text: "Date, nom, signature et cachet", fontSize: 8.5, alignment: "center", color: "#555555", margin: [0, 2, 0, 0] }], margin: [0, 12, 0, 50] }] }
-    ]
+      { columns: [left, right], columnGap: 16 },
+      { columns: [panel("FOURNISSEUR", fournLines), panel(liv.mode === "enlevement" ? "ENLÈVEMENT" : "ADRESSE DE LIVRAISON", livLines)], columnGap: 14, margin: [0, 18, 0, 0] },
+      refTable,
+      { table: { headerRows: 1, dontBreakRows: true, widths: [62, "*", 32, 34, 66, 70], body }, layout: lignes, margin: [0, 14, 0, 0] },
+      { columns: [{ width: "*", table: { widths: ["*"], body: [[lab("CONDITIONS")], [{ stack: remarks, margin: [0, 2, 0, 2] }]] }, layout: box }, { width: 200, ...totals }], columnGap: 14, margin: [0, 14, 0, 0], unbreakable: true },
+      { columns: [{ width: "*", text: "" }, { width: 230, table: { widths: ["*"], heights: [12, 62], body: [[lab("BON POUR COMMANDE")], [{ text: "Date, nom, signature et cachet", fontSize: 8, color: C.grey }]] }, layout: box }], margin: [0, 14, 0, 0], unbreakable: true }
+    ].filter(Boolean)
   };
 }
 function bcPdfName(b) {
@@ -2537,6 +2571,8 @@ async function bcPdf(other) {
   let marked = false;
   if (!other) {
     if (!BC.cur.fournisseur.nom.trim()) { toast("Choisissez d'abord le fournisseur"); $("b-fourn").focus(); return; }
+    if (!String(BC.cur.num || "").trim()) { toast("Saisissez d'abord votre n° de commande"); $("b-num").focus(); return; }
+    if (bcNumTaken(BC.cur)) { toast(`Le n° ${BC.cur.num} est déjà utilisé par un autre bon : changez-le`); $("b-num").focus(); return; }
     if (BC.cur.status === "brouillon" && BC.cur.lines.some((l) => l.kind !== "text") && !S.readOnly && BC.ready) { BC.cur.status = "commande"; $("b-status").value = "commande"; BC.dirty = true; marked = true; }
     if ((BC.dirty || !BC.cur.id) && !S.readOnly && BC.ready) { if (!(await bcSave(true))) return; }
   }
@@ -2573,11 +2609,11 @@ async function renderBcList() {
   $("bclExport").disabled = !rows.length;
   if (!BC.list.length) { $("bclWrap").innerHTML = `<div class="empty-state"><b>Aucun bon de commande pour l'instant</b>Créez-en un avec « Nouveau bon de commande » : il sera listé ici, séparé des devis DO.</div>`; return; }
   if (!rows.length) { $("bclWrap").innerHTML = `<div class="empty-state"><b>Aucun bon ne correspond</b>Modifiez la recherche ou les filtres.</div>`; return; }
-  $("bclWrap").innerHTML = `<table class="data" style="min-width:980px"><thead><tr><th>N°</th><th>Date</th><th>Fournisseur</th><th>Affaire / chantier</th><th>Réf. offre</th><th>Devis DO</th><th class="r">Total HT</th><th>Statut</th><th class="r">Actions</th></tr></thead><tbody>` +
-    rows.map((b) => `<tr class="click" data-id="${esc(b.id)}" title="Ouvrir le bon de commande"><td class="mono">${esc(b.num)}</td><td class="num">${frDate(b.date)}${b.auteur ? `<div class="muted" style="font-size:12px">${esc(b.auteur)}</div>` : ""}</td><td>${esc(b.fournisseur && b.fournisseur.nom)}</td><td>${esc(b.affaire)}</td><td class="mono">${esc(b.refOffre)}</td>
+  $("bclWrap").innerHTML = `<table class="data" style="min-width:980px"><thead><tr><th>N°</th><th>Date</th><th>Fournisseur</th><th>Affaire / chantier</th><th>N° devis fournisseur</th><th>Devis DO</th><th class="r">Total HT</th><th>Statut</th><th class="r">Actions</th></tr></thead><tbody>` +
+    rows.map((b) => `<tr class="click" data-id="${esc(b.id)}" title="Ouvrir le bon de commande"><td class="mono">${String(b.num || "").trim() ? esc(b.num) : `<span class="muted">sans n°</span>`}</td><td class="num">${frDate(b.date)}${b.auteur ? `<div class="muted" style="font-size:12px">${esc(b.auteur)}</div>` : ""}</td><td>${esc(b.fournisseur && b.fournisseur.nom)}</td><td>${esc(b.affaire)}</td><td class="mono">${esc(b.refOffre)}</td>
       <td>${b.devisId && S.devis.some((d) => d.id === b.devisId) ? `<button class="linkish mono" data-a="devis">${esc(b.devisNum)}</button>` : esc(b.devisNum || "")}</td>
       <td class="r money">${money(bcTotals(b).ht)}</td><td><span class="status-chip st-${esc(b.status || "brouillon")}">${esc(BC_STATUS[b.status] || "Brouillon")}</span></td>
-      <td class="r" style="white-space:nowrap"><button class="btn sm" data-a="hist">Versions</button> <button class="btn sm" data-a="dup">Dupliquer</button> <button class="btn sm danger ${bcArmedDel === b.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${bcArmedDel === b.id ? "Confirmer" : "Supprimer"}</button></td></tr>`).join("") + `</tbody></table>`;
+      <td class="r" style="white-space:nowrap"><button class="btn sm primary" data-a="open">Modifier</button> <button class="btn sm" data-a="dup">Dupliquer</button> <button class="btn sm" data-a="hist">Versions</button> <button class="btn sm danger ${bcArmedDel === b.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${bcArmedDel === b.id ? "Confirmer" : "Supprimer"}</button></td></tr>`).join("") + `</tbody></table>`;
 }
 async function bcExportList() {
   const rows = bcListRows(); if (!rows.length) return;
@@ -2586,7 +2622,7 @@ async function bcExportList() {
   const det = []; rows.forEach((b) => (b.lines || []).filter((l) => l.kind !== "text").forEach((l) => det.push([b.num, xlDate(b.date), b.fournisseur.nom, b.affaire, l.ref, l.des, { t: "n", v: Number(l.qt) || 0 }, l.unite, xlMoney(l.pu), Number(l.pour) || 1, xlMoney(bcLineTotal(l))])));
   const actifs = rows.filter((b) => b.status !== "annule");
   const wb = X.utils.book_new();
-  X.utils.book_append_sheet(wb, xlSheet(X, ["N° BC", "Date", "Fournisseur", "Affaire / chantier", "Réf. offre", "Devis DO", "Statut", "Total HT", "Total TTC", "Commandé par"], recap,
+  X.utils.book_append_sheet(wb, xlSheet(X, ["N° BC", "Date", "Fournisseur", "Affaire / chantier", "N° devis fournisseur", "Devis DO", "Statut", "Total HT", "Total TTC", "Commandé par"], recap,
     ["Total (hors annulés)", "", "", "", "", "", `${actifs.length} bon${actifs.length > 1 ? "s" : ""}`, xlMoney(sumBy(actifs, (b) => bcTotals(b).ht)), xlMoney(sumBy(actifs, (b) => bcTotals(b).ttc)), ""], [14, 12, 22, 30, 16, 14, 14, 14, 14, 16]), "Bons de commande");
   X.utils.book_append_sheet(wb, xlSheet(X, ["N° BC", "Date", "Fournisseur", "Affaire / chantier", "Référence", "Désignation", "Quantité", "Unité", "PU net HT", "Prix pour", "Montant HT"], det, null, [14, 12, 22, 28, 16, 56, 10, 8, 13, 9, 14]), "Détail articles");
   const out = X.write(wb, { bookType: "xlsx", type: "array", compression: true });
@@ -2667,6 +2703,7 @@ function bindAchats() {
   $("bcUnites").innerHTML = BC_UNITES.map((u) => `<option value="${u}"></option>`).join("");
   document.querySelectorAll("[data-ac]").forEach((b) => b.addEventListener("click", () => achatsGo(b.dataset.ac)));
   Object.entries(BF).forEach(([id, path]) => $(id).addEventListener("input", (e) => { bcSet(path, e.target.value); bcMarkDirty(); if (id === "b-agence" || id === "b-adresse") renderBcCatalog(); }));
+  $("b-num").addEventListener("blur", (e) => { const v = e.target.value.trim(); if (v !== e.target.value) { e.target.value = v; BC.cur.num = v; renderBcHead(); } });
   $("b-fourn").addEventListener("change", (e) => bcChooseFourn(e.target.value));
   $("b-devis").addEventListener("change", (e) => bcChooseDevis(e.target.value));
   $("b-livMode").addEventListener("change", (e) => bcSetLivMode(e.target.value));
@@ -2715,13 +2752,14 @@ function bindAchats() {
     const tr = e.target.closest("tr[data-id]"); if (!tr) return; const id = tr.dataset.id; const a = e.target.closest("[data-a]");
     const b = BC.list.find((x) => x.id === id) || bcTrash.find((x) => x.id === id);
     if (!a) { if (tr.classList.contains("click")) bcOpen(id); return; }
+    if (a.dataset.a === "open") { bcOpen(id); return; }
     if (a.dataset.a === "devis") { openDevis(b.devisId); return; }
     if (a.dataset.a === "hist") openBcHistory(id, b);
     if (a.dataset.a === "dup") bcDuplicate(b);
-    if (a.dataset.a === "restore") { if (await Store.restoreBc(id)) { toast(`Bon ${b.num} restauré`); renderBcList(); } }
+    if (a.dataset.a === "restore") { if (await Store.restoreBc(id)) { toast(`Bon ${bcLabel(b)} restauré`); renderBcList(); } }
     if (a.dataset.a === "del") {
       if (bcArmedDel !== id) { bcArmedDel = id; renderBcList(); setTimeout(() => { if (bcArmedDel === id) { bcArmedDel = null; renderBcList(); } }, 4000); return; }
-      bcArmedDel = null; if (await Store.deleteBc(id)) { toast(`Bon ${b.num} supprimé (récupérable dans la corbeille)`); if (BC.cur && BC.cur.id === id) { BC.cur = blankBc(); BC.dirty = false; loadBcForm(); } }
+      bcArmedDel = null; if (await Store.deleteBc(id)) { toast(`Bon ${bcLabel(b)} supprimé (récupérable dans la corbeille)`); if (BC.cur && BC.cur.id === id) { BC.cur = blankBc(); BC.dirty = false; loadBcForm(); } }
     }
   });
   // versions
@@ -3411,7 +3449,7 @@ function bcxRender() {
       <div class="lx-head">
         <label class="field"><span>Fournisseur <small class="muted">· choisi dans le bon</small></span><input type="text" value="${esc(b.fournisseur.nom || "— à choisir dans le bon —")}" disabled></label>
         <label class="field"><span>Affaire / chantier ${b.affaire ? `<small class="muted">· déjà remplie dans le bon</small>` : ""}</span><input type="text" id="bcx-affaire" value="${esc(p.affaireVal)}"></label>
-        <label class="field"><span>Réf. offre fournisseur</span><input type="text" id="bcx-refOffre" value="${esc(p.refVal)}"></label>
+        <label class="field"><span>N° devis fournisseur</span><input type="text" id="bcx-refOffre" value="${esc(p.refVal)}"></label>
       </div>
       ${p.lines.length ? `<ul class="lx-notes"><li>Décochez ce que vous n'avez pas à commander. Chaque ligne peut reprendre un article déjà connu (prix enregistré) ou rester telle que dans le texte.</li></ul>
       <div style="overflow-x:auto"><table class="data lx-t"><thead><tr><th></th><th>Qté</th><th>Article</th><th class="r">PU net HT</th><th class="r">Total HT</th></tr></thead><tbody>${p.lines.map((l, i) => {
