@@ -373,6 +373,7 @@ table.data.edit .w-t { width: 96px; }
 
 <main>
   <div id="banner" class="banner" hidden></div>
+  <div id="backupBanner" class="banner note" hidden></div>
 
   <!-- ============ DEVIS ============ -->
   <section class="view" id="view-devis">
@@ -790,6 +791,10 @@ table.data.edit .w-t { width: 96px; }
       </div>
       <div class="panel stack">
         <h2>Sauvegarde</h2>
+        <div class="stack" id="fullBackup" hidden>
+          <p style="margin:0;font-size:13px"><b>Sauvegarde complète</b> : tous les devis (avec la corbeille et les versions), les bons de commande, les fournisseurs, la production, les BPU et les réglages, dans un seul fichier. Faites-la chaque semaine et rangez le fichier dans un endroit sûr de l'entreprise, jamais sur GitHub : il contient les données des clients.</p>
+          <div class="row"><button class="btn primary" id="btnFullBackup" type="button">Sauvegarde complète</button><span class="muted" id="fullBackupState" style="font-size:13px"></span></div>
+        </div>
         <p class="muted" style="margin:0;font-size:13px" id="backupHint">Exportez tous les devis, les BPU créés, les rattachements DO et ces réglages dans un fichier .json. Importez ce fichier sur un autre ordinateur ou après avoir vidé le navigateur.</p>
         <div class="row">
           <button class="btn" id="btnExport" type="button">Exporter les données</button>
@@ -853,6 +858,33 @@ function addDays(iso, n) { const d = new Date(iso + "T12:00:00"); d.setDate(d.ge
 function dayDiff(fromIso, toIso) { return Math.round((Date.parse(toIso + "T12:00:00Z") - Date.parse(fromIso + "T12:00:00Z")) / 86400000); }
 function frDate(iso) { if (!iso) return ""; const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
 const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+/* ---------------- sauvegarde complète (toutes les tables Supabase) ---------------- */
+const backupDays = () => { const b = S.lastBackup; return b && b.at ? Math.floor((Date.now() - Date.parse(b.at)) / 86400000) : null; };
+function renderBackupState() {
+  if (!Store.fullBackup) return;
+  const el = $("fullBackupState"); const b = S.lastBackup; const days = backupDays(); const due = days === null || days >= 7;
+  if (el) { el.className = due ? "warn-txt" : "muted"; el.textContent = b && b.at ? `Dernière : ${fmtDT(b.at)}${b.by ? " par " + b.by : ""}${days >= 7 ? ` (il y a ${days} jours)` : ""}` : "Aucune sauvegarde complète pour l'instant"; }
+  const ban = $("backupBanner"); if (!ban) return;
+  ban.hidden = !due;
+  if (due) { ban.innerHTML = (days === null ? "Aucune sauvegarde complète des données pour l'instant." : `Dernière sauvegarde complète il y a ${days} jours.`) + ` <a href="#societe" id="toFullBackup">Faire une sauvegarde maintenant</a>`;
+    $("toFullBackup").addEventListener("click", (e) => { e.preventDefault(); showView("societe"); $("btnFullBackup").focus(); }); }
+}
+async function fullBackup() {
+  if (!Store.fullBackup) return;
+  const btn = $("btnFullBackup"); btn.disabled = true; btn.textContent = "Sauvegarde en cours…";
+  try {
+    const tables = await Store.fullBackup();
+    const counts = Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, v.length]));
+    const data = { app: "crm-ipkonekt-sauvegarde-complete", version: 1, exportedAt: new Date().toISOString(), exportedBy: Store.author || "", counts, tables };
+    const name = `CRM-IPKONEKT-sauvegarde-complete-${todayISO()}.json`;
+    if (await saveFile(name, new Blob([JSON.stringify(data)], { type: "application/json" }))) {
+      const info = { at: data.exportedAt, by: Store.author || "", counts };
+      S.lastBackup = info; renderBackupState(); await Store.saveConfig("sauvegarde", info);
+      toast(`Sauvegarde complète : ${counts.devis} devis, ${counts.bons_commande} bons de commande`);
+    }
+  } catch (e) { console.error(e); toast("Sauvegarde impossible : " + ((e && e.message) || "erreur réseau")); }
+  finally { btn.disabled = false; btn.textContent = "Sauvegarde complète"; }
+}
 let toastT; function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2400); }
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -1051,6 +1083,19 @@ function makeSupaStore(cfg) {
     async deleteGrid(id) {
       try { await q(sb.from("bpu").delete().eq("id", id).eq("builtin", false)); await refreshOthers(); return true; }
       catch (e) { return fail(e, "Suppression du BPU"); }
+    },
+    async fullBackup() {
+      const tables = { devis: "id", devis_historique: "id", bons_commande: "id", bons_commande_historique: "id", fournisseurs: "id", production: "id", bpu: "id", config: "key" };
+      const out = {};
+      for (const [t, key] of Object.entries(tables)) {
+        const rows = [];
+        for (let from = 0; ; from += 1000) {
+          const page = await q(sb.from(t).select("*").order(key, { ascending: true }).range(from, from + 999));
+          rows.push(...page); if (page.length < 1000) break;
+        }
+        out[t] = rows;
+      }
+      return out;
     },
     async saveConfig(k, body) {
       try { await q(sb.from("config").upsert({ key: k, data: body, updated_at: now(), updated_by: author || null })); cache.config = { ...cache.config, [k]: body }; subs.config.forEach((f) => f(cache.config)); return true; }
@@ -1851,6 +1896,7 @@ function bindCompany() {
   });
   $("c-logoReset").addEventListener("click", () => { pendingLogo = ""; renderCompany(); toast("Logo d'origine : cliquez sur Enregistrer"); });
   $("btnExport").addEventListener("click", exportAll);
+  $("btnFullBackup").addEventListener("click", fullBackup);
   $("importFile").addEventListener("change", async (e) => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; if (S.readOnly) { toast("Import impossible en lecture seule"); return; } await importAll(f); });
   $("btnSaveCompany").addEventListener("click", async () => {
     const c = { ...S.company }; Object.entries(CF).forEach(([k, id]) => { c[k] = $(id).value; }); c.tva = parseNum(c.tva) ?? 20;
@@ -3624,7 +3670,9 @@ async function startData() {
   $("pdfHint").textContent = downloads || !window.claude ? "" : "Le téléchargement de fichiers n'est pas disponible dans cette vue.";
 
   let firstDevis = true;
+  if (Store.fullBackup) $("fullBackup").hidden = false;
   Store.onConfig((cfg) => {
+    if (Store.fullBackup) { S.lastBackup = cfg.sauvegarde || null; renderBackupState(); }
     if (cfg.company) S.company = { ...DEFAULT_COMPANY, ...cfg.company };
     if (cfg.mapping && cfg.mapping.map) S.mapping = cfg.mapping.map;
     if (cfg.doaddr && cfg.doaddr.map) S.doAddr = cfg.doaddr.map;
