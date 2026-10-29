@@ -91,7 +91,7 @@ main { padding-inline: 16px; padding-block: 16px 48px; }
 /* Form */
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field > span { font-size: 12px; color: var(--muted); font-weight: 500; }
-input[type=text], input[type=number], input[type=date], input[type=search], select, textarea {
+input[type=text], input[type=number], input[type=date], input[type=search], input[type=email], input[type=password], select, textarea {
   width: 100%; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: 5px; padding: 7px 9px; }
 input:focus, select:focus, textarea:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 20%, transparent); }
 textarea { resize: vertical; }
@@ -298,6 +298,16 @@ table.data.edit .w-t { width: 96px; }
 .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 .role-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .role-badge.admin { background: var(--accent-soft); color: var(--accent); }
+.role-badge.resp { background: var(--ok-soft); color: var(--ok); }
+.gate-note { margin: 0; font-size: 13px; color: var(--muted); }
+.eq-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 8px 10px; align-items: end; }
+.eq-steps { margin: 0; padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.eq-role-line { margin: 0; font-size: 13px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+table.data td.eq-in input { min-width: 120px; width: 100%; }
+table.data td.eq-in select { min-width: 150px; width: 100%; }
+#eqWrap td { white-space: nowrap; }
+#eqWrap .chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+@media (max-width: 720px) { .eq-add { grid-template-columns: minmax(0, 1fr); } }
 .gate-switch { align-self: center; font-size: 13px; }
 .intra-box { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
 .intra-box .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
@@ -353,8 +363,9 @@ table.data.edit .w-t { width: 96px; }
     <button class="tab" role="tab" data-view="suivi" aria-selected="false" id="tabSuivi" hidden>Fil de l'eau</button>
     <button class="tab" role="tab" data-view="achats" aria-selected="false" id="tabAchats" hidden>Bons de commande</button>
     <button class="tab" role="tab" data-view="histo" aria-selected="false" id="tabHisto" hidden>Historique</button>
-    <button class="tab" role="tab" data-view="bpu" aria-selected="false">BPU &amp; DO</button>
+    <button class="tab" role="tab" data-view="bpu" aria-selected="false" id="tabBpu" hidden>BPU &amp; DO</button>
     <button class="tab" role="tab" data-view="societe" aria-selected="false" id="tabSociete" hidden>Société</button>
+    <button class="tab" role="tab" data-view="equipe" aria-selected="false" id="tabEquipe" hidden>Équipe</button>
   </nav>
   <div class="store-state" id="storeState"><span class="dot"></span><span>Connexion…</span></div>
   <div class="who" id="who" hidden><span class="muted">Connecté :</span> <button class="linkish" id="btnRename" type="button" title="Changer le nom affiché dans l'historique"></button> <span class="role-badge" id="roleBadge" hidden></span> <button class="btn sm ghost" id="btnLogout" type="button">Se déconnecter</button></div>
@@ -363,12 +374,22 @@ table.data.edit .w-t { width: 96px; }
 <div class="gate" id="gate" hidden>
   <form class="gate-card" id="gateForm" autocomplete="on">
     <div class="gate-brand"><img alt="" id="gateLogo"><div><b>CRM Devis</b><span>IPKONEKT · accès réservé à l'équipe</span></div></div>
-    <label class="field"><span>Votre prénom (affiché dans l'historique)</span><input type="text" id="g-name" autocomplete="given-name" required></label>
-    <label class="field" id="g-emailBox" hidden><span>Adresse e-mail de l'administrateur</span><input type="email" id="g-email" autocomplete="username" inputmode="email"></label>
-    <label class="field"><span id="g-codeLabel">Code d'accès</span><input type="password" id="g-code" autocomplete="current-password" required></label>
+    <label class="field" id="g-emailBox"><span>Votre adresse e-mail</span><input type="email" id="g-email" autocomplete="username" inputmode="email"></label>
+    <label class="field" id="g-nameBox" hidden><span>Votre prénom (affiché dans l'historique)</span><input type="text" id="g-name" autocomplete="given-name"></label>
+    <label class="field"><span id="g-codeLabel">Votre mot de passe</span><input type="password" id="g-code" autocomplete="current-password" required></label>
     <p class="gate-err" id="gateErr" role="alert" hidden></p>
     <button class="btn primary" type="submit" id="gateBtn">Entrer</button>
-    <button class="linkish gate-switch" type="button" id="gateSwitch">Connexion administrateur</button>
+    <button class="linkish gate-switch" type="button" id="gateSwitch">Utiliser le code équipe (provisoire)</button>
+  </form>
+  <form class="gate-card" id="pwForm" hidden autocomplete="on">
+    <div class="gate-brand"><img alt="" id="pwLogo"><div><b id="pwName">Bienvenue</b><span>Choisissez votre mot de passe personnel</span></div></div>
+    <p class="gate-note">Pour votre première connexion, remplacez le mot de passe provisoire par un mot de passe que vous seul connaissez : au moins 10 caractères, par exemple trois mots et un chiffre.</p>
+    <input type="email" id="pw-user" autocomplete="username" hidden>
+    <label class="field"><span>Nouveau mot de passe</span><input type="password" id="pw-new" autocomplete="new-password" required></label>
+    <label class="field"><span>Retapez-le</span><input type="password" id="pw-new2" autocomplete="new-password" required></label>
+    <p class="gate-err" id="pwErr" role="alert" hidden></p>
+    <button class="btn primary" type="submit" id="pwBtn">Enregistrer mon mot de passe</button>
+    <button class="linkish gate-switch" type="button" id="pwCancel">Se déconnecter</button>
   </form>
 </div>
 
@@ -769,6 +790,47 @@ table.data.edit .w-t { width: 96px; }
     <div class="bpu-list" id="bpuList"></div>
   </section>
 
+  <!-- ============ ÉQUIPE (administrateur) ============ -->
+  <section class="view" id="view-equipe" hidden>
+    <div class="toolbar"><h1>Équipe et accès</h1><button class="btn" id="eqRefresh" type="button">Actualiser</button></div>
+    <div class="panel stack" style="min-width:0;margin-bottom:16px">
+        <h2>Personnes qui ont accès au CRM</h2>
+        <div class="table-wrap" id="eqWrap"><div class="empty-state">Chargement…</div></div>
+        <h2 style="margin-top:8px">Ajouter une personne</h2>
+        <form class="eq-add" id="eqAdd">
+          <label class="field"><span>Prénom</span><input type="text" id="eq-prenom" required></label>
+          <label class="field"><span>Nom</span><input type="text" id="eq-nom"></label>
+          <label class="field"><span>Adresse e-mail</span><input type="email" id="eq-email" required placeholder="prenom.nom@ipkonekt.com"></label>
+          <label class="field"><span>Rôle</span><select id="eq-role"><option value="user">Utilisateur</option><option value="resp">Responsable</option><option value="admin">Administrateur</option></select></label>
+          <button class="btn primary" type="submit">Ajouter</button>
+        </form>
+    </div>
+    <div class="settings">
+        <div class="panel stack">
+          <h2>Les rôles</h2>
+          <p class="eq-role-line"><span class="role-badge admin">Administrateur</span> Tout : tous les onglets (Société et Équipe compris), toutes les suppressions.</p>
+          <p class="eq-role-line"><span class="role-badge resp">Responsable</span> Devis, Liste, Bons de commande, Historique, plus <b>Fil de l'eau</b> et <b>BPU &amp; DO</b> (lecture et modification).</p>
+          <p class="eq-role-line"><span class="role-badge">Utilisateur</span> Devis, Liste des devis, Bons de commande, Historique (lecture et modification).</p>
+          <p class="muted" style="margin:0;font-size:13px">Hors administrateur, on ne supprime qu'un devis ou un bon de commande resté au statut Brouillon. Ces règles sont appliquées par la base de données.</p>
+        </div>
+        <div class="panel stack">
+          <h2>Donner l'accès à une nouvelle personne</h2>
+          <ol class="eq-steps">
+            <li>Ajoutez-la ici avec son adresse e-mail et son rôle.</li>
+            <li>Dans Supabase : <b>Authentication</b> → <b>Users</b> → <b>Add user</b> → <b>Create new user</b>. Même adresse, un mot de passe provisoire, cochez <b>Auto Confirm User</b>.</li>
+            <li>Donnez-lui le mot de passe provisoire de vive voix. À sa première connexion, le CRM lui demande d'en choisir un nouveau.</li>
+          </ol>
+          <h2 style="margin-top:4px">Mot de passe oublié</h2>
+          <ol class="eq-steps">
+            <li>Dans Supabase → Authentication → Users : supprimez son compte, puis recréez-le avec la même adresse et un mot de passe provisoire (Auto Confirm User).</li>
+            <li>Ici, cliquez sur <b>Nouveau mot de passe</b> sur sa ligne : il devra en choisir un à la connexion suivante.</li>
+          </ol>
+          <h2 style="margin-top:4px">Départ d'une personne</h2>
+          <p style="margin:0;font-size:13px">Décochez <b>Actif</b> : son accès est coupé tout de suite, son nom reste dans l'historique. Quand chacun a son compte, décochez aussi le <b>compte équipe</b> (code partagé).</p>
+        </div>
+    </div>
+  </section>
+
   <!-- ============ SOCIÉTÉ ============ -->
   <section class="view" id="view-societe" hidden>
     <div class="toolbar"><h1>Société et mentions du devis</h1>
@@ -920,7 +982,8 @@ const S = {
   scopeAll: false,
   readOnly: false,
   storeReady: false,
-  role: null                // « admin » ou « user » (donné par la base à la connexion)
+  role: null,               // « admin », « resp » ou « user » (donné par la base à la connexion)
+  me: null                  // fiche de la personne connectée : { email, prenom, nom, role, mdpAChanger }
 };
 
 /* ---------------- storage (db capability, local fallback) ---------------- */
@@ -999,7 +1062,7 @@ function makeSupaStore(cfg) {
   const isAuthErr = (e) => e && (e.status === 401 || /jwt|token|auth/i.test(e.message || "") || e.code === "PGRST301");
   function fail(e, what) {
     console.error(e);
-    if (isAuthErr(e)) { toast("Session expirée : saisissez à nouveau le code d'accès"); showGate(); }
+    if (isAuthErr(e)) { toast("Session expirée : reconnectez-vous"); showGate(); }
     else toast(`${what} impossible : ${(e && e.message) || "erreur réseau"}`);
     return false;
   }
@@ -1044,7 +1107,54 @@ function makeSupaStore(cfg) {
     async loadRole() {
       const { data, error } = await sb.rpc("crm_role");
       if (error) { console.error(error); return { role: null, error }; }
-      return { role: data === "admin" || data === "user" ? data : null, error: null };
+      return { role: ["admin", "resp", "user"].includes(data) ? data : null, error: null };
+    },
+    /* Fiche de la personne connectée (liste de l'équipe) : { email, prenom, nom, role, mdpAChanger } ou null */
+    async loadMe() {
+      const { data, error } = await sb.rpc("crm_moi");
+      if (error) {
+        if (error.code === "PGRST202") { const r = await this.loadRole(); return { me: r.role ? { email: await this.sessionEmail(), prenom: "", nom: "", role: r.role, mdpAChanger: false } : null, error: r.error, ancienne: true }; }
+        console.error(error); return { me: null, error };
+      }
+      return { me: data && ["admin", "resp", "user"].includes(data.role) ? data : null, error: null };
+    },
+    /* Changement de mot de passe (compte personnel). « actuel » est revérifié, sauf juste après la connexion. */
+    async changePassword(actuel, nouveau) {
+      const email = await this.sessionEmail();
+      if (actuel !== null) {
+        const { error: e1 } = await sb.auth.signInWithPassword({ email, password: actuel });
+        if (e1) return /invalid/i.test(e1.message || "") ? "Mot de passe actuel incorrect." : "Vérification impossible : " + (e1.message || "erreur réseau");
+      }
+      const { error } = await sb.auth.updateUser({ password: nouveau });
+      if (error) {
+        const m = error.message || "";
+        if (/different/i.test(m)) return "Choisissez un mot de passe différent de l'ancien.";
+        if (/weak|pwned|leak|at least|characters/i.test(m)) return "Mot de passe trop simple : allongez-le (au moins 10 caractères, mélangez lettres et chiffres).";
+        if (/reauth/i.test(m)) return "Reconnectez-vous puis recommencez.";
+        return "Changement impossible : " + (m || "erreur réseau");
+      }
+      try { await sb.rpc("crm_mdp_change"); } catch (e) {}
+      return null;
+    },
+    /* ---- équipe (administrateur seulement : la base refuse les autres) ---- */
+    async listMembres() {
+      try { return await q(sb.from("crm_membres").select("email,prenom,nom,role,actif,mdp_a_changer,updated_at").order("email")); }
+      catch (e) { fail(e, "Lecture de l'équipe"); return null; }
+    },
+    async addMembre(m) {
+      const { error } = await sb.from("crm_membres").insert({ email: m.email, prenom: m.prenom || "", nom: m.nom || "", role: m.role, actif: true, mdp_a_changer: true });
+      if (!error) return true;
+      if (error.code === "23505") { toast("Cette adresse est déjà dans l'équipe"); return false; }
+      if (error.code === "23514") { toast("Adresse e-mail invalide"); return false; }
+      return fail(error, "Ajout");
+    },
+    async updateMembre(email, patch) {
+      try { const rows = await q(sb.from("crm_membres").update(patch).eq("email", email).select("email")); if (!rows.length) { toast("Modification refusée"); return false; } return true; }
+      catch (e) { return fail(e, "Modification"); }
+    },
+    async deleteMembre(email) {
+      try { const rows = await q(sb.from("crm_membres").delete().eq("email", email).select("email")); if (!rows.length) { toast("Suppression refusée"); return false; } return true; }
+      catch (e) { return fail(e, "Suppression"); }
     },
     async signOut() {
       /* Compte partagé : on ne ferme que la session de CE poste (par défaut, Supabase fermerait celles de toute l'équipe). */
@@ -1268,17 +1378,28 @@ if (CRM_CFG && window.supabase && window.supabase.createClient) Store = makeSupa
    la page serait refusé par Supabase. Ici on cache seulement ce qu'il n'a pas le droit de faire. */
 if (Store === ArtifactStore) S.role = "admin"; // version locale, sans compte : pas de rôles
 const isAdmin = () => S.role === "admin";
+const isResp = () => S.role === "admin" || S.role === "resp"; // Fil de l'eau et BPU & DO
+const ROLE_LABEL = { admin: "Administrateur", resp: "Responsable", user: "Utilisateur" };
+/* compte personnel (e-mail + mot de passe à soi) ou compte équipe partagé (code d'accès, provisoire) */
+const isPersonal = () => !!(S.me && S.me.email && S.me.email !== Store.teamEmail);
+function viewAllowed(v) {
+  if (v === "societe" || v === "equipe") return isAdmin();
+  if (v === "bpu" || v === "suivi") return isResp();
+  return true;
+}
 const NODEL_DEVIS = "Seul l'administrateur peut supprimer un devis qui a quitté le statut Brouillon.";
 const NODEL_BC = "Seul l'administrateur peut supprimer un bon de commande qui a quitté le statut Brouillon.";
 const devisSupprimable = (d) => isAdmin() || !!(d && (d.status || "brouillon") === "brouillon" && !d.dateEnvoi);
 const bcSupprimable = (b) => isAdmin() || !!(b && (b.status || "brouillon") === "brouillon");
 function applyRole() {
   const admin = isAdmin();
-  document.body.classList.toggle("role-admin", admin); document.body.classList.toggle("role-user", !admin);
-  $("tabSociete").hidden = !admin;
+  ["admin", "resp", "user"].forEach((r) => document.body.classList.toggle("role-" + r, S.role === r));
+  $("tabSociete").hidden = !admin; $("tabEquipe").hidden = !admin || Store === ArtifactStore;
+  $("tabBpu").hidden = !isResp(); $("tabSuivi").hidden = !(Store.features.suivi && isResp());
   const badge = $("roleBadge");
-  if (badge) { badge.hidden = Store === ArtifactStore; badge.textContent = admin ? "Administrateur" : "Utilisateur"; badge.className = "role-badge" + (admin ? " admin" : ""); }
-  if (!admin && !$("view-societe").hidden) showView("devis");
+  if (badge) { badge.hidden = Store === ArtifactStore; badge.textContent = ROLE_LABEL[S.role] || ""; badge.className = "role-badge" + (S.role === "user" ? "" : " " + S.role); }
+  const open = ["societe", "equipe", "bpu", "suivi"].find((v) => !$("view-" + v).hidden);
+  if (open && !viewAllowed(open)) showView("devis");
   renderBackupState();
 }
 
@@ -1994,6 +2115,59 @@ function bindCompany() {
     const c = { ...S.company }; Object.entries(CF).forEach(([k, id]) => { c[k] = $(id).value; }); c.tva = parseNum(c.tva) ?? 20;
     if (pendingLogo !== null) c.logo = pendingLogo;
     if (await Store.saveConfig("company", c)) { S.company = c; pendingLogo = null; renderCompany(); toast("Informations société enregistrées"); }
+  });
+}
+
+/* ---------------- équipe et accès (administrateur) ----------------
+   La liste est dans la table crm_membres : la base refuse toute lecture ou modification à un non-administrateur
+   et empêche de retirer le dernier administrateur actif. */
+let eqArmed = null;
+const EQ_ORDER = { admin: 0, resp: 1, user: 2 };
+async function renderEquipe() {
+  if (!isAdmin() || !Store.listMembres) return;
+  const rows = await Store.listMembres(); if (!rows) return;
+  const me = S.me ? S.me.email : "";
+  rows.sort((a, b) => (a.email === Store.teamEmail) - (b.email === Store.teamEmail) || EQ_ORDER[a.role] - EQ_ORDER[b.role] || (a.prenom || a.email).localeCompare(b.prenom || b.email, "fr"));
+  const opt = (r, cur) => `<option value="${r}" ${r === cur ? "selected" : ""}>${ROLE_LABEL[r]}</option>`;
+  $("eqWrap").innerHTML = `<table class="data" style="min-width:980px"><thead><tr><th>Prénom</th><th>Nom</th><th>Adresse e-mail</th><th>Rôle</th><th>Accès</th><th>Mot de passe</th><th class="r"></th></tr></thead><tbody>` +
+    rows.map((m) => { const self = m.email === me, team = m.email === Store.teamEmail;
+      return `<tr data-email="${esc(m.email)}"${m.actif ? "" : ` class="muted"`}>
+        <td class="eq-in"><input type="text" data-f="prenom" value="${esc(m.prenom)}" aria-label="Prénom"></td>
+        <td class="eq-in"><input type="text" data-f="nom" value="${esc(m.nom)}" aria-label="Nom"></td>
+        <td class="mono">${esc(m.email)}${self ? ` <span class="muted">(vous)</span>` : ""}</td>
+        <td class="eq-in"><select data-f="role" aria-label="Rôle" ${self ? "disabled" : ""}>${opt("user", m.role)}${opt("resp", m.role)}${opt("admin", m.role)}</select></td>
+        <td><label class="row chk"><input type="checkbox" data-f="actif" ${m.actif ? "checked" : ""} ${self ? "disabled" : ""}> Actif</label></td>
+        <td>${team ? `<span class="muted">Code partagé</span>` : m.mdp_a_changer ? `<span class="warn-txt">À choisir à la connexion</span>` : `<span class="muted">Choisi par la personne</span>`}</td>
+        <td class="r" style="white-space:nowrap">${!team && !self && !m.mdp_a_changer ? `<button class="btn sm" type="button" data-a="mdp">Nouveau mot de passe</button> ` : ""}${self ? "" : `<button class="btn sm danger ${eqArmed === m.email ? "armed" : ""}" type="button" data-a="del">${eqArmed === m.email ? "Confirmer" : "Retirer"}</button>`}</td></tr>`; }).join("") + `</tbody></table>`;
+}
+function bindEquipe() {
+  $("eqRefresh").addEventListener("click", renderEquipe);
+  $("eqWrap").addEventListener("change", async (e) => {
+    const el = e.target.closest("[data-f]"); if (!el) return; const email = el.closest("tr").dataset.email; const f = el.dataset.f;
+    const v = f === "actif" ? el.checked : f === "role" ? el.value : el.value.trim();
+    if (await Store.updateMembre(email, { [f]: v })) toast(f === "actif" ? (v ? "Accès rétabli" : "Accès coupé") : f === "role" ? `Rôle : ${ROLE_LABEL[v]}` : "Enregistré");
+    renderEquipe();
+  });
+  $("eqWrap").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-a]"); if (!b) return; const email = b.closest("tr").dataset.email;
+    if (b.dataset.a === "mdp") {
+      if (await Store.updateMembre(email, { mdp_a_changer: true })) toast("À sa prochaine connexion, cette personne devra choisir un nouveau mot de passe");
+      renderEquipe(); return;
+    }
+    if (b.dataset.a === "del") {
+      if (eqArmed !== email) { eqArmed = email; renderEquipe(); setTimeout(() => { if (eqArmed === email) { eqArmed = null; if (!$("view-equipe").hidden) renderEquipe(); } }, 4000); return; }
+      eqArmed = null; if (await Store.deleteMembre(email)) toast("Personne retirée de l'équipe : pensez aussi à supprimer son compte dans Supabase");
+      renderEquipe();
+    }
+  });
+  $("eqAdd").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const m = { prenom: $("eq-prenom").value.trim(), nom: $("eq-nom").value.trim(), email: $("eq-email").value.trim().toLowerCase(), role: $("eq-role").value };
+    if (!m.prenom || !m.email) return;
+    if (await Store.addMembre(m)) {
+      $("eqAdd").reset(); renderEquipe();
+      toast(`${m.prenom} ajouté${m.role === "user" ? "" : ` (${ROLE_LABEL[m.role]})`}. Créez maintenant son compte dans Supabase avec la même adresse.`);
+    }
   });
 }
 
@@ -3647,10 +3821,10 @@ function bindLectureBc() {
 
 /* ---------------- views ---------------- */
 function showView(v) {
-  if (v === "societe" && !isAdmin()) v = "devis"; // onglet Société : administrateur seulement
+  if (!viewAllowed(v)) v = "devis"; // onglets réservés selon le rôle (voir viewAllowed)
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.view === v));
-  ["devis", "liste", "suivi", "achats", "histo", "bpu", "societe"].forEach((x) => { $("view-" + x).hidden = x !== v; });
-  if (v === "liste") renderList(); if (v === "bpu") renderBpu(); if (v === "societe") renderCompany(); if (v === "histo") renderJournal(); if (v === "suivi") renderSuivi(); if (v === "achats") renderAchats();
+  ["devis", "liste", "suivi", "achats", "histo", "bpu", "societe", "equipe"].forEach((x) => { $("view-" + x).hidden = x !== v; });
+  if (v === "liste") renderList(); if (v === "bpu") renderBpu(); if (v === "societe") renderCompany(); if (v === "histo") renderJournal(); if (v === "suivi") renderSuivi(); if (v === "achats") renderAchats(); if (v === "equipe") renderEquipe();
   try { history.replaceState(null, "", "#" + v); } catch (e) {}
 }
 
@@ -3662,7 +3836,7 @@ const idleExpired = () => { const t = idleLast(); return t > 0 && Date.now() - t
 function idleMsg() {
   if (!lsGet("crm:idleOut", 0)) return "";
   lsSet("crm:idleOut", 0);
-  return `Déconnecté après ${IDLE_MIN} minutes sans activité. Entrez à nouveau le code d'accès.`;
+  return `Déconnecté après ${IDLE_MIN} minutes sans activité. Reconnectez-vous.`;
 }
 let idleBusy = false;
 async function idleLogout() {
@@ -3690,7 +3864,7 @@ async function startIdleGuard() {
 /* ---------------- boot ---------------- */
 async function boot() {
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showView(t.dataset.view)));
-  bindForm(); bindLines(); bindCatalog(); bindList(); bindBpu(); bindCompany();
+  bindForm(); bindLines(); bindCatalog(); bindList(); bindBpu(); bindCompany(); bindEquipe();
   $("btnNew").addEventListener("click", newDevis); $("btnNew2").addEventListener("click", newDevis);
   $("btnDup").addEventListener("click", () => duplicateDevis(S.cur));
   $("btnSave").addEventListener("click", () => saveCurrent(false));
@@ -3706,87 +3880,156 @@ async function boot() {
     bindGate();
     await startIdleGuard();
     if (!(await Store.hasSession())) { showGate(idleMsg()); return; }
-    if (!Store.author) { showGate(idleMsg()); return; }
     if (!(await resolveRole())) return;
+    if (!isPersonal() && !Store.author) { gateTeam = true; showGate(idleMsg()); return; } // compte équipe : il faut un prénom
+    if (!(await needNewPassword())) return;
   }
   await startData();
 }
 
-/* Rôle du compte connecté, lu dans la base. Sans rôle : pas d'accès. */
+/* Fiche et rôle de la personne connectée, lus dans la base. Pas dans la liste de l'équipe (ou désactivée) : pas d'accès. */
 async function resolveRole() {
-  const { role, error } = await Store.loadRole();
-  if (role) { S.role = role; applyRole(); return true; }
+  const { me, error, ancienne } = await Store.loadMe();
+  if (me) {
+    S.me = me; S.role = me.role; applyRole();
+    if (isPersonal()) Store.setAuthor(me.prenom || me.nom || me.email.split("@")[0]); // le nom vient de la liste de l'équipe
+    if (ancienne) { const b = $("banner"); b.hidden = false; b.className = "banner note"; b.textContent = "Mise à jour de la base à faire (script « comptes personnels ») : les rôles Responsable et l'onglet Équipe ne sont pas encore actifs."; }
+    return true;
+  }
   const email = await Store.sessionEmail();
   if (error && error.code === "PGRST202" && email === Store.teamEmail) {
-    // la base n'a pas encore reçu le script des droits : l'équipe garde l'accès, sans l'onglet Société
-    S.role = "user"; applyRole();
-    const b = $("banner"); b.hidden = false; b.className = "banner note"; b.textContent = "Mise à jour de la base à faire (script des droits) : l'accès administrateur n'est pas encore disponible.";
+    // la base n'a encore reçu aucun script : l'équipe garde l'accès, onglets réservés cachés
+    S.me = { email, prenom: "", nom: "", role: "user", mdpAChanger: false }; S.role = "user"; applyRole();
+    const b = $("banner"); b.hidden = false; b.className = "banner note"; b.textContent = "Mise à jour de la base à faire (script « comptes personnels ») : les accès personnels ne sont pas encore actifs.";
     return true;
   }
   await Store.signOut();
-  showGate(error ? (error.code === "PGRST202" ? "La base n'est pas encore à jour : lancez d'abord le script SQL des droits dans Supabase." : "Impossible de vérifier vos droits : " + (error.message || "erreur réseau") + ". Réessayez.") : "Ce compte n'a pas accès au CRM.");
+  showGate(error ? (error.code === "PGRST202" ? "La base n'est pas encore à jour : lancez d'abord le script « comptes personnels » dans Supabase." : "Impossible de vérifier vos droits : " + (error.message || "erreur réseau") + ". Réessayez.")
+    : "Ce compte n'a pas accès au CRM (ou son accès a été coupé). Demandez à l'administrateur.");
   return false;
 }
 
-let gateAdmin = !!lsGet("crm:gateAdmin", false);
+/* Première connexion (ou mot de passe réinitialisé par l'administrateur) : la personne choisit son mot de passe. */
+let pwResolve = null;
+function needNewPassword() {
+  if (!(isPersonal() && S.me.mdpAChanger)) return Promise.resolve(true);
+  $("gate").hidden = false; $("gateForm").hidden = true; $("pwForm").hidden = false;
+  $("pwLogo").src = DEFAULT_LOGO; $("pwName").textContent = "Bienvenue" + (S.me.prenom ? " " + S.me.prenom : ""); $("pw-user").value = S.me.email;
+  $("pwErr").hidden = true; $("pw-new").value = ""; $("pw-new2").value = ""; $("pw-new").focus();
+  return new Promise((res) => { pwResolve = res; });
+}
+function checkNewPassword(a, b) {
+  if (a.length < 10) return "Au moins 10 caractères, s'il vous plaît.";
+  if (a !== b) return "Les deux mots de passe ne sont pas identiques.";
+  if (/^(.)\1+$/.test(a) || /^(0123456789|1234567890|azertyuiop|motdepasse)/i.test(a)) return "Mot de passe trop simple.";
+  return "";
+}
+
+let gateTeam = !!lsGet("crm:gateTeam", false);
 function renderGateMode() {
-  $("g-emailBox").hidden = !gateAdmin; $("g-email").required = gateAdmin;
-  if (gateAdmin && !$("g-email").value) $("g-email").value = lsGet("crm:adminEmail", "");
-  $("g-codeLabel").textContent = gateAdmin ? "Mot de passe administrateur" : "Code d'accès";
-  $("gateSwitch").textContent = gateAdmin ? "Connexion équipe (code d'accès)" : "Connexion administrateur";
+  $("g-emailBox").hidden = gateTeam; $("g-email").required = !gateTeam;
+  $("g-nameBox").hidden = !gateTeam; $("g-name").required = gateTeam;
+  if (!gateTeam && !$("g-email").value) $("g-email").value = lsGet("crm:email", "");
+  $("g-codeLabel").textContent = gateTeam ? "Code d'accès de l'équipe" : "Votre mot de passe";
+  $("gateSwitch").textContent = gateTeam ? "Se connecter avec mon adresse e-mail" : "Utiliser le code équipe (provisoire)";
 }
 function showGate(msg) {
   $("gateLogo").src = DEFAULT_LOGO;
-  $("gate").hidden = false; $("g-name").value = (Store.author || lsGet("crm:author", "")) || "";
+  $("gate").hidden = false; $("gateForm").hidden = false; $("pwForm").hidden = true;
+  $("g-name").value = (Store.author || lsGet("crm:author", "")) || "";
   renderGateMode();
   const err = $("gateErr"); err.hidden = !msg; err.textContent = msg || "";
-  (!$("g-name").value ? $("g-name") : gateAdmin && !$("g-email").value ? $("g-email") : $("g-code")).focus();
+  (gateTeam ? ($("g-name").value ? $("g-code") : $("g-name")) : ($("g-email").value ? $("g-code") : $("g-email"))).focus();
 }
 let dataStarted = false;
 function bindGate() {
   $("gateSwitch").addEventListener("click", () => {
-    gateAdmin = !gateAdmin; lsSet("crm:gateAdmin", gateAdmin); $("g-code").value = ""; $("gateErr").hidden = true;
-    renderGateMode(); (gateAdmin && !$("g-email").value ? $("g-email") : $("g-code")).focus();
+    gateTeam = !gateTeam; lsSet("crm:gateTeam", gateTeam); $("g-code").value = ""; $("gateErr").hidden = true;
+    renderGateMode(); (gateTeam ? ($("g-name").value ? $("g-code") : $("g-name")) : ($("g-email").value ? $("g-code") : $("g-email"))).focus();
   });
   $("gateForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("g-name").value.trim(); const code = $("g-code").value;
-    const email = gateAdmin ? $("g-email").value.trim().toLowerCase() : Store.teamEmail;
-    if (!name || !code || !email) return;
+    const email = gateTeam ? Store.teamEmail : $("g-email").value.trim().toLowerCase();
+    if (!code || !email || (gateTeam && !name)) return;
+    if (!gateTeam && email === Store.teamEmail) { gateTeam = true; lsSet("crm:gateTeam", true); renderGateMode(); $("g-code").value = code; $("g-name").focus(); toast("Compte équipe : indiquez votre prénom"); return; }
     $("gateBtn").disabled = true; $("gateBtn").textContent = "Vérification…";
     const same = (await Store.hasSession()) && (await Store.sessionEmail()) === email;
     const err = same ? null : await Store.signIn(code, email);
     $("gateBtn").disabled = false; $("gateBtn").textContent = "Entrer"; $("g-code").value = "";
     if (err) {
-      const m = /invalid/i.test(err.message || "") ? (gateAdmin ? "Adresse ou mot de passe incorrect." : "Code d'accès incorrect.") : /rate|many/i.test(err.message || "") ? "Trop de tentatives. Patientez quelques minutes." : "Connexion impossible : " + (err.message || "erreur réseau");
+      const m = /invalid/i.test(err.message || "") ? (gateTeam ? "Code d'accès incorrect." : "Adresse e-mail ou mot de passe incorrect.")
+        : /confirm/i.test(err.message || "") ? "Compte pas encore confirmé : dans Supabase, il faut cocher « Auto Confirm User » à la création."
+        : /rate|many/i.test(err.message || "") ? "Trop de tentatives. Patientez quelques minutes." : "Connexion impossible : " + (err.message || "erreur réseau");
       $("gateErr").hidden = false; $("gateErr").textContent = m; $("g-code").focus(); return;
     }
-    if (gateAdmin) lsSet("crm:adminEmail", email);
-    const before = S.role;
+    if (!gateTeam) lsSet("crm:email", email);
+    const before = S.me ? S.me.email : null;
     if (!(await resolveRole())) return;
-    Store.setAuthor(name); lsSet(IDLE_KEY, Date.now()); $("gate").hidden = true; updateWho();
-    if (dataStarted && before && before !== S.role) { location.reload(); return; } // autre compte : on repart de zéro
+    if (!isPersonal()) Store.setAuthor(name);
+    lsSet(IDLE_KEY, Date.now());
+    if (dataStarted && before && before !== S.me.email) { location.reload(); return; } // autre compte : on repart de zéro
+    if (!(await needNewPassword())) return;
+    $("gate").hidden = true; updateWho();
     if (!dataStarted) await startData();
   });
+  $("pwForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const a = $("pw-new").value, b = $("pw-new2").value; const bad = checkNewPassword(a, b);
+    const err = $("pwErr"); if (bad) { err.hidden = false; err.textContent = bad; return; }
+    $("pwBtn").disabled = true; $("pwBtn").textContent = "Enregistrement…";
+    const m = await Store.changePassword(null, a);
+    $("pwBtn").disabled = false; $("pwBtn").textContent = "Enregistrer mon mot de passe";
+    if (m) { err.hidden = false; err.textContent = m; return; }
+    S.me.mdpAChanger = false; $("pw-new").value = ""; $("pw-new2").value = "";
+    $("pwForm").hidden = true; $("gate").hidden = true; updateWho(); toast("Mot de passe enregistré. Gardez-le pour vous.");
+    if (pwResolve) { const r = pwResolve; pwResolve = null; r(true); }
+  });
+  $("pwCancel").addEventListener("click", async () => { await Store.signOut(); location.hash = ""; location.reload(); });
   $("btnLogout").addEventListener("click", async () => { await Store.signOut(); location.hash = ""; location.reload(); });
-  $("btnRename").addEventListener("click", () => {
-    openModal("Nom affiché dans l'historique", `<form id="renameForm" class="stack" style="padding:16px"><label class="field"><span>Votre prénom</span><input type="text" id="r-name" value="${esc(Store.author)}" required></label><div class="row"><button class="btn primary" type="submit">Enregistrer</button></div></form>`);
-    $("r-name").focus();
-    $("renameForm").addEventListener("submit", (e) => { e.preventDefault(); const n = $("r-name").value.trim(); if (n) { Store.setAuthor(n); updateWho(); closeModal(); toast("Nom mis à jour"); } });
+  $("btnRename").addEventListener("click", () => (isPersonal() ? openMonCompte() : openRename()));
+}
+function openRename() {
+  openModal("Nom affiché dans l'historique", `<form id="renameForm" class="stack" style="padding:16px"><label class="field"><span>Votre prénom</span><input type="text" id="r-name" value="${esc(Store.author)}" required></label><p class="muted" style="margin:0;font-size:13px">Compte équipe partagé : demandez à l'administrateur votre accès personnel.</p><div class="row"><button class="btn primary" type="submit">Enregistrer</button></div></form>`);
+  $("r-name").focus();
+  $("renameForm").addEventListener("submit", (e) => { e.preventDefault(); const n = $("r-name").value.trim(); if (n) { Store.setAuthor(n); updateWho(); closeModal(); toast("Nom mis à jour"); } });
+}
+function openMonCompte() {
+  const me = S.me;
+  openModal("Mon compte", `<form id="mcForm" class="stack" style="padding:16px" autocomplete="on">
+    <p style="margin:0"><b>${esc([me.prenom, me.nom].filter(Boolean).join(" ") || me.email)}</b> · ${esc(me.email)} · <span class="role-badge ${me.role === "user" ? "" : me.role}">${esc(ROLE_LABEL[me.role] || "")}</span></p>
+    <p class="muted" style="margin:0;font-size:13px">Votre nom et votre rôle sont réglés par l'administrateur (onglet Équipe).</p>
+    <h2 style="margin-top:6px">Changer mon mot de passe</h2>
+    <input type="email" autocomplete="username" value="${esc(me.email)}" hidden>
+    <label class="field"><span>Mot de passe actuel</span><input type="password" id="mc-old" autocomplete="current-password" required></label>
+    <label class="field"><span>Nouveau mot de passe (au moins 10 caractères)</span><input type="password" id="mc-new" autocomplete="new-password" required></label>
+    <label class="field"><span>Retapez-le</span><input type="password" id="mc-new2" autocomplete="new-password" required></label>
+    <p class="gate-err" id="mcErr" role="alert" hidden></p>
+    <div class="row"><button class="btn primary" type="submit" id="mcBtn">Changer le mot de passe</button></div></form>`);
+  $("mc-old").focus();
+  $("mcForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("mcErr"); const a = $("mc-new").value; const bad = checkNewPassword(a, $("mc-new2").value);
+    if (bad) { err.hidden = false; err.textContent = bad; return; }
+    $("mcBtn").disabled = true; const m = await Store.changePassword($("mc-old").value, a); $("mcBtn").disabled = false;
+    if (m) { err.hidden = false; err.textContent = m; return; }
+    closeModal(); toast("Mot de passe changé");
   });
 }
-function updateWho() { if (Store.mode !== "supabase") return; $("who").hidden = false; $("btnRename").textContent = Store.author || "?"; }
+function updateWho() {
+  if (Store.mode !== "supabase") return; $("who").hidden = false; $("btnRename").textContent = Store.author || "?";
+  $("btnRename").title = isPersonal() ? "Mon compte : changer mon mot de passe" : "Changer le nom affiché dans l'historique";
+}
 
 async function startData() {
   dataStarted = true;
   try { S.catalog = await Store.loadCatalog(); }
   catch (e) { const b = $("banner"); b.hidden = false; b.className = "banner note"; b.textContent = "Le catalogue des BPU n'a pas pu être chargé. Rechargez la page."; S.catalog = { grids: [], mapping: {}, dos: [] }; }
   S.cur = blankDevis(); loadIntoForm(); afterCatalog();
-  if (Store.features.suivi) $("tabSuivi").hidden = false;
   if (Store.features.history) { $("tabHisto").hidden = false; $("listStatus").insertAdjacentHTML("beforeend", `<option value="__trash">Corbeille</option>`); }
   updateWho(); applyRole();
   if (Store.features.achats && Store.onBcs) startAchats();
-  const hash = (location.hash || "").slice(1); if (["liste", "bpu", "societe", "histo", "suivi", "achats"].includes(hash)) showView(hash);
+  const hash = (location.hash || "").slice(1); if (["liste", "bpu", "societe", "equipe", "histo", "suivi", "achats"].includes(hash)) showView(hash);
 
   const { mode, canWrite } = await Store.init();
   const ss = $("storeState");
