@@ -295,6 +295,12 @@ table.data.edit .w-t { width: 96px; }
 .mi-actions { position: sticky; bottom: 0; background: var(--surface); padding: 8px 0 2px; border-top: 1px solid var(--line); }
 @media (max-width: 720px) { .mi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .who { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.role-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.role-badge.admin { background: var(--accent-soft); color: var(--accent); }
+.gate-switch { align-self: center; font-size: 13px; }
+.intra-box { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.intra-box .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
 .linkish { border: 0; background: none; padding: 0; font-weight: 600; color: var(--brand); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Access gate */
@@ -348,19 +354,21 @@ table.data.edit .w-t { width: 96px; }
     <button class="tab" role="tab" data-view="achats" aria-selected="false" id="tabAchats" hidden>Bons de commande</button>
     <button class="tab" role="tab" data-view="histo" aria-selected="false" id="tabHisto" hidden>Historique</button>
     <button class="tab" role="tab" data-view="bpu" aria-selected="false">BPU &amp; DO</button>
-    <button class="tab" role="tab" data-view="societe" aria-selected="false">Société</button>
+    <button class="tab" role="tab" data-view="societe" aria-selected="false" id="tabSociete" hidden>Société</button>
   </nav>
   <div class="store-state" id="storeState"><span class="dot"></span><span>Connexion…</span></div>
-  <div class="who" id="who" hidden><span class="muted">Connecté :</span> <button class="linkish" id="btnRename" type="button" title="Changer le nom affiché dans l'historique"></button> <button class="btn sm ghost" id="btnLogout" type="button">Se déconnecter</button></div>
+  <div class="who" id="who" hidden><span class="muted">Connecté :</span> <button class="linkish" id="btnRename" type="button" title="Changer le nom affiché dans l'historique"></button> <span class="role-badge" id="roleBadge" hidden></span> <button class="btn sm ghost" id="btnLogout" type="button">Se déconnecter</button></div>
 </header>
 
 <div class="gate" id="gate" hidden>
   <form class="gate-card" id="gateForm" autocomplete="on">
     <div class="gate-brand"><img alt="" id="gateLogo"><div><b>CRM Devis</b><span>IPKONEKT · accès réservé à l'équipe</span></div></div>
     <label class="field"><span>Votre prénom (affiché dans l'historique)</span><input type="text" id="g-name" autocomplete="given-name" required></label>
-    <label class="field"><span>Code d'accès</span><input type="password" id="g-code" autocomplete="current-password" required></label>
+    <label class="field" id="g-emailBox" hidden><span>Adresse e-mail de l'administrateur</span><input type="email" id="g-email" autocomplete="username" inputmode="email"></label>
+    <label class="field"><span id="g-codeLabel">Code d'accès</span><input type="password" id="g-code" autocomplete="current-password" required></label>
     <p class="gate-err" id="gateErr" role="alert" hidden></p>
     <button class="btn primary" type="submit" id="gateBtn">Entrer</button>
+    <button class="linkish gate-switch" type="button" id="gateSwitch">Connexion administrateur</button>
   </form>
 </div>
 
@@ -414,6 +422,10 @@ table.data.edit .w-t { width: 96px; }
               <label class="field"><span>Nom du DO</span><input type="text" id="f-doName"></label>
               <label class="field"><span>Adresse du DO</span><input type="text" id="f-doAddress" autocomplete="off" placeholder="Saisie une fois, mémorisée pour ce DO"></label>
               <label class="field"><span>Code postal et ville du DO</span><input type="text" id="f-doCpVille" autocomplete="off"></label>
+              <div class="intra-box" id="f-intraBox" hidden>
+                <label class="chk"><input type="checkbox" id="f-intracom"><span><b>TVA intracommunautaire</b> (autoliquidation) : devis sans TVA, avec la mention légale sur le PDF</span></label>
+                <label class="field" id="f-tvaIntraBox" hidden><span>N° de TVA intracommunautaire du DO</span><input type="text" id="f-tvaIntra" autocomplete="off" placeholder="Saisi une fois, mémorisé pour ce DO"></label>
+              </div>
               <div class="field"><span>Conditions de règlement</span>
                 <div class="radio-row">
                   <label><input type="radio" name="accompte" id="f-acc1" value="1"> Acompte de 50 % à la signature</label>
@@ -773,6 +785,7 @@ table.data.edit .w-t { width: 96px; }
         <h2 style="margin-top:8px">Conditions</h2>
         <label class="field"><span>Texte avec acompte de 50 %</span><textarea id="c-condAcc" rows="5"></textarea></label>
         <label class="field"><span>Texte à 30 jours net</span><textarea id="c-cond30" rows="4"></textarea></label>
+        <label class="field"><span>Mention TVA intracommunautaire <small class="muted">(devis Etam avec l'option cochée)</small></span><textarea id="c-mentionIntra" rows="2"></textarea></label>
         <div class="fields-4" style="grid-template-columns:repeat(3,minmax(0,1fr))">
           <label class="field"><span>Mode de règlement par défaut</span><input type="text" id="c-mode"></label>
           <label class="field"><span>TVA par défaut (%)</span><input type="number" id="c-tva" step="0.1"></label>
@@ -837,8 +850,11 @@ const DEFAULT_COMPANY = {
   mode: "Virement Bancaire",
   tva: 20,
   prefix: "DV",
+  mentionIntra: "Autoliquidation : TVA due par le preneur (article 196 de la directive 2006/112/CE).",
   logo: ""
 };
+/* Option « TVA intracommunautaire » : réservée au DO Etam (repéré par son nom) */
+const INTRACOM_DO = /(^|[^a-z0-9])etam([^a-z0-9]|$)/;
 const STATUS = { brouillon: "Brouillon", envoye: "Envoyé – en attente", accepte: "Accepté", refuse: "Refusé", erreur: "Erreur" };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -862,6 +878,7 @@ const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 const backupDays = () => { const b = S.lastBackup; return b && b.at ? Math.floor((Date.now() - Date.parse(b.at)) / 86400000) : null; };
 function renderBackupState() {
   if (!Store.fullBackup) return;
+  if (!isAdmin()) { $("backupBanner").hidden = true; return; } // la sauvegarde est l'affaire de l'administrateur
   const el = $("fullBackupState"); const b = S.lastBackup; const days = backupDays(); const due = days === null || days >= 7;
   if (el) { el.className = due ? "warn-txt" : "muted"; el.textContent = b && b.at ? `Dernière : ${fmtDT(b.at)}${b.by ? " par " + b.by : ""}${days >= 7 ? ` (il y a ${days} jours)` : ""}` : "Aucune sauvegarde complète pour l'instant"; }
   const ban = $("backupBanner"); if (!ban) return;
@@ -870,7 +887,7 @@ function renderBackupState() {
     $("toFullBackup").addEventListener("click", (e) => { e.preventDefault(); showView("societe"); $("btnFullBackup").focus(); }); }
 }
 async function fullBackup() {
-  if (!Store.fullBackup) return;
+  if (!Store.fullBackup || !isAdmin()) return;
   const btn = $("btnFullBackup"); btn.disabled = true; btn.textContent = "Sauvegarde en cours…";
   try {
     const tables = await Store.fullBackup();
@@ -885,7 +902,7 @@ async function fullBackup() {
   } catch (e) { console.error(e); toast("Sauvegarde impossible : " + ((e && e.message) || "erreur réseau")); }
   finally { btn.disabled = false; btn.textContent = "Sauvegarde complète"; }
 }
-let toastT; function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2400); }
+let toastT; function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), Math.max(2400, Math.min(7000, String(msg).length * 55))); }
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
@@ -902,7 +919,8 @@ const S = {
   dirty: false,
   scopeAll: false,
   readOnly: false,
-  storeReady: false
+  storeReady: false,
+  role: null                // « admin » ou « user » (donné par la base à la connexion)
 };
 
 /* ---------------- storage (db capability, local fallback) ---------------- */
@@ -1016,8 +1034,18 @@ function makeSupaStore(cfg) {
     get mode() { return "supabase"; },
     get author() { return author; },
     setAuthor(n) { author = n; lsSet("crm:author", n); },
-    async hasSession() { const { data } = await sb.auth.getSession(); return !!(data.session && data.session.user && data.session.user.email === cfg.email); },
-    async signIn(code) { const { error } = await sb.auth.signInWithPassword({ email: cfg.email, password: code }); return error ? error : null; },
+    async hasSession() { const { data } = await sb.auth.getSession(); return !!(data.session && data.session.user && data.session.user.email); },
+    async sessionEmail() { const { data } = await sb.auth.getSession(); return String((data.session && data.session.user && data.session.user.email) || "").toLowerCase(); },
+    teamEmail: String(cfg.email || "").toLowerCase(),
+    /* Compte équipe (code partagé) ou compte administrateur (adresse + mot de passe personnels) */
+    async signIn(code, email) { const { error } = await sb.auth.signInWithPassword({ email: email || cfg.email, password: code }); return error ? error : null; },
+    /* Rôle donné par la base (fonction crm_role) : « admin », « user » ou null (compte sans accès).
+       Les vraies limites sont dans la base ; la page ne fait que cacher ce qui serait refusé. */
+    async loadRole() {
+      const { data, error } = await sb.rpc("crm_role");
+      if (error) { console.error(error); return { role: null, error }; }
+      return { role: data === "admin" || data === "user" ? data : null, error: null };
+    },
     async signOut() {
       /* Compte partagé : on ne ferme que la session de CE poste (par défaut, Supabase fermerait celles de toute l'équipe). */
       let error = null; try { ({ error } = await sb.auth.signOut({ scope: "local" })); } catch (e) { error = e; }
@@ -1081,7 +1109,11 @@ function makeSupaStore(cfg) {
       catch (e) { return fail(e, "Enregistrement du BPU"); }
     },
     async deleteGrid(id) {
-      try { await q(sb.from("bpu").delete().eq("id", id).eq("builtin", false)); await refreshOthers(); return true; }
+      try {
+        const rows = await q(sb.from("bpu").delete().eq("id", id).eq("builtin", false).select("id"));
+        if (!rows || !rows.length) { toast("Suppression impossible : seul l'administrateur peut supprimer un BPU"); return false; }
+        await refreshOthers(); return true;
+      }
       catch (e) { return fail(e, "Suppression du BPU"); }
     },
     async fullBackup() {
@@ -1231,6 +1263,25 @@ const CRM_CFG = window.CRM_CONFIG || null;
 let Store = ArtifactStore;
 if (CRM_CFG && window.supabase && window.supabase.createClient) Store = makeSupaStore(CRM_CFG);
 
+/* ---------------- rôles : administrateur / utilisateur ----------------
+   Les limites réelles sont dans la base (script SQL du 29/10/2026) : un utilisateur qui contournerait
+   la page serait refusé par Supabase. Ici on cache seulement ce qu'il n'a pas le droit de faire. */
+if (Store === ArtifactStore) S.role = "admin"; // version locale, sans compte : pas de rôles
+const isAdmin = () => S.role === "admin";
+const NODEL_DEVIS = "Seul l'administrateur peut supprimer un devis qui a quitté le statut Brouillon.";
+const NODEL_BC = "Seul l'administrateur peut supprimer un bon de commande qui a quitté le statut Brouillon.";
+const devisSupprimable = (d) => isAdmin() || !!(d && (d.status || "brouillon") === "brouillon" && !d.dateEnvoi);
+const bcSupprimable = (b) => isAdmin() || !!(b && (b.status || "brouillon") === "brouillon");
+function applyRole() {
+  const admin = isAdmin();
+  document.body.classList.toggle("role-admin", admin); document.body.classList.toggle("role-user", !admin);
+  $("tabSociete").hidden = !admin;
+  const badge = $("roleBadge");
+  if (badge) { badge.hidden = Store === ArtifactStore; badge.textContent = admin ? "Administrateur" : "Utilisateur"; badge.className = "role-badge" + (admin ? " admin" : ""); }
+  if (!admin && !$("view-societe").hidden) showView("devis");
+  renderBackupState();
+}
+
 function setReadOnly(msg) {
   S.readOnly = true;
   const b = $("banner"); b.hidden = false; b.className = "banner note"; b.textContent = msg;
@@ -1264,14 +1315,14 @@ function blankDevis() {
     doCode: "", doName: "", doAddress: "", doCpVille: "", accompte: false,
     reference: "", refBTE: "", ticket: "", mode: c.mode || "Virement Bancaire",
     client: { name: "", address: "", cpVille: "" },
-    validite: addDays(todayISO(), 30), tva: Number(c.tva) || 20,
+    validite: addDays(todayISO(), 30), tva: Number(c.tva) || 20, intracom: false, tvaIntra: "",
     cdp: "", cdpAuto: true, activite: "", dateEnvoi: "", relances: 0, derniereRelance: "", commentaire: "",
     extraGrids: [], lines: []
   };
 }
 function totals(d) {
   const ht = round2((d.lines || []).reduce((s, l) => s + (l.kind === "text" ? 0 : (Number(l.pu) || 0) * (Number(l.qt) || 0)), 0));
-  const tva = round2(ht * (Number(d.tva) || 0) / 100);
+  const tva = d.intracom ? 0 : round2(ht * (Number(d.tva) || 0) / 100);
   return { ht, tva, ttc: round2(ht + tva) };
 }
 function nextNumber() {
@@ -1301,7 +1352,24 @@ function loadIntoForm() {
   $("f-acc1").checked = !!d.accompte; $("f-acc0").checked = !d.accompte;
   fillSelect($("f-cdp"), SUIVI().cdps, d.cdp, "—"); fillSelect($("f-activite"), SUIVI().activites, d.activite, "—");
   $("f-relances").textContent = d.relances ? `${d.relances} · dernière le ${frDate(d.derniereRelance)}` : (d.status === "envoye" ? "Jamais relancé" : "—");
-  renderHead(); renderLines(); renderCatalog();
+  renderIntra(); renderHead(); renderLines(); renderCatalog();
+}
+/* ---- TVA intracommunautaire (DO Etam seulement) ---- */
+function intracomPossible(d) { return !!d && INTRACOM_DO.test(norm([d.doName, d.doCode ? doName(d.doCode) : ""].join(" "))); }
+function setIntracom(on) {
+  const d = S.cur; on = !!on && intracomPossible(d);
+  if (on === !!d.intracom) return false;
+  if (on) { d.tvaAvantIntra = Number(d.tva) || 0; d.tva = 0; }
+  else { d.tva = typeof d.tvaAvantIntra === "number" && d.tvaAvantIntra > 0 ? d.tvaAvantIntra : (Number(S.company.tva) || 20); delete d.tvaAvantIntra; }
+  d.intracom = on; return true;
+}
+function renderIntra() {
+  const d = S.cur; const on = !!d.intracom;
+  $("f-intraBox").hidden = !intracomPossible(d) && !on;
+  $("f-intracom").checked = on; $("f-tvaIntraBox").hidden = !on;
+  if (document.activeElement !== $("f-tvaIntra")) $("f-tvaIntra").value = d.tvaIntra || "";
+  $("f-tva").value = d.tva; $("f-tva").disabled = on;
+  $("f-tva").title = on ? "TVA à 0 % : option TVA intracommunautaire cochée" : "";
 }
 function renderHead() {
   const d = S.cur;
@@ -1336,9 +1404,15 @@ function bindForm() {
   $("f-acc1").addEventListener("change", () => { S.cur.accompte = true; markDirty(); });
   $("f-acc0").addEventListener("change", () => { S.cur.accompte = false; markDirty(); });
   $("f-do").addEventListener("change", (e) => chooseDo(e.target.value));
+  $("f-intracom").addEventListener("change", (e) => {
+    setIntracom(e.target.checked); renderIntra(); renderTotals(); markDirty();
+    if (S.cur.intracom && !S.cur.tvaIntra) $("f-tvaIntra").focus();
+  });
+  $("f-tvaIntra").addEventListener("input", (e) => { S.cur.tvaIntra = e.target.value; markDirty(); });
+  $("f-doName").addEventListener("input", () => { if (S.cur.intracom && !intracomPossible(S.cur)) { setIntracom(false); renderTotals(); } renderIntra(); });
 }
 function chooseDo(text) {
-  const t = text.trim();
+  const t = text.trim(); const prevCode = S.cur.doCode;
   const found = S.catalog.dos.find((d) => d.name.toLowerCase() === t.toLowerCase() || d.code.toLowerCase() === t.toLowerCase());
   const d = S.cur;
   const hasAddr = (a) => !!(a && ((a.address || "").trim() || (a.cpVille || "").trim()));
@@ -1355,11 +1429,22 @@ function chooseDo(text) {
     const saved = S.doAddr[d.doCode];
     d.doAddress = hasAddr(saved) ? saved.address || "" : ""; d.doCpVille = hasAddr(saved) ? saved.cpVille || "" : "";
   }
+  // TVA intracommunautaire : seulement pour Etam ; le dernier choix et le n° de TVA sont mémorisés pour ce DO
+  let intraMsg = "";
+  if (intracomPossible(d)) {
+    const mem = S.doAddr[d.doCode] || {};
+    d.tvaIntra = mem.tvaIntra || (prevCode === d.doCode ? d.tvaIntra || "" : "");
+    if (typeof mem.intracom === "boolean" && setIntracom(mem.intracom) && d.intracom) intraMsg = " · TVA intracommunautaire (0 %)";
+  } else {
+    if (d.intracom) { setIntracom(false); intraMsg = " · Option TVA intracommunautaire retirée (réservée à Etam)"; }
+    d.tvaIntra = "";
+  }
   if (d.cdpAuto !== false || !d.cdp) { d.cdp = d.doCode ? cdpForDo(d.doCode) : ""; d.cdpAuto = true; }
   loadIntoForm(); markDirty();
   const n = gridsOfDo(d.doCode).length;
   const noAddr = d.doCode && !d.doAddress && !d.doCpVille ? " · Adresse inconnue : saisissez-la, elle sera mémorisée" : "";
-  if (d.doCode) toast((n ? `${n} BPU rattaché${n > 1 ? "s" : ""} à ${d.doName} ajouté${n > 1 ? "s" : ""} aux prestations` : `${d.doName} n'a pas de BPU rattaché : grille IPKONEKT affichée`) + noAddr);
+  if (d.doCode) toast((n ? `${n} BPU rattaché${n > 1 ? "s" : ""} à ${d.doName} ajouté${n > 1 ? "s" : ""} aux prestations` : `${d.doName} n'a pas de BPU rattaché : grille IPKONEKT affichée`) + noAddr + intraMsg);
+  else if (intraMsg) toast(intraMsg.replace(/^ · /, ""));
   if (noAddr) $("f-doAddress").focus();
 }
 
@@ -1388,7 +1473,7 @@ function autoGrow(t) { t.style.height = "auto"; t.style.height = Math.max(34, t.
 function renderTotals() {
   const t = totals(S.cur);
   $("tHT").textContent = money(t.ht); $("tTVA").textContent = money(t.tva); $("tTTC").textContent = money(t.ttc);
-  $("tTvaLabel").textContent = `TVA ${String(S.cur.tva).replace(".", ",")} %`;
+  $("tTvaLabel").textContent = S.cur.intracom ? "TVA 0 % (autoliquidation)" : `TVA ${String(S.cur.tva).replace(".", ",")} %`;
 }
 function bindLines() {
   const body = $("linesBody");
@@ -1507,6 +1592,7 @@ async function saveCurrent(silent) {
   const latest = S.devis.find((x) => x.id === d.id);
   if (latest) { d.relances = Number(latest.relances) || 0; d.derniereRelance = latest.derniereRelance || ""; d.commentaire = latest.commentaire || ""; }
   if (d.doCode && !d.cdp) { d.cdp = cdpForDo(d.doCode); d.cdpAuto = true; }
+  if (d.intracom && !intracomPossible(d)) { setIntracom(false); renderIntra(); renderTotals(); } // réservé au DO Etam
   d.updatedAt = now;
   const body = JSON.parse(JSON.stringify(d));
   const ok = await Store.saveDevis(body);
@@ -1516,7 +1602,8 @@ async function saveCurrent(silent) {
   // remember the DO address like Mobility4 does (never memorise an empty address)
   if (d.doCode && ((d.doAddress || "").trim() || (d.doCpVille || "").trim())) {
     const prev = S.doAddr[d.doCode]; const nv = { address: d.doAddress || "", cpVille: d.doCpVille || "", accompte: !!d.accompte };
-    if (!prev || prev.address !== nv.address || prev.cpVille !== nv.cpVille || prev.accompte !== nv.accompte) {
+    if (intracomPossible(d)) { nv.intracom = !!d.intracom; nv.tvaIntra = String(d.tvaIntra || "").trim() || (prev && prev.tvaIntra) || ""; }
+    if (!prev || prev.address !== nv.address || prev.cpVille !== nv.cpVille || prev.accompte !== nv.accompte || prev.intracom !== nv.intracom || (prev.tvaIntra || "") !== (nv.tvaIntra || "")) {
       S.doAddr = { ...S.doAddr, [d.doCode]: nv }; await Store.saveConfig("doaddr", { map: S.doAddr });
     }
   }
@@ -1546,7 +1633,7 @@ function duplicateDevis(src) {
 /*PDFDOC-START*/
 function buildPdfDoc(d, company, logo, forWhom) {
   const C = { teal: "#044E67", line: "#2E4E4E", text: "#1B1B1B" };
-  const t = (function () { const ht = Math.round(d.lines.reduce((s, l) => s + (l.kind === "text" ? 0 : (Number(l.pu) || 0) * (Number(l.qt) || 0)), 0) * 100) / 100; const tva = Math.round(ht * (Number(d.tva) || 0)) / 100; return { ht, tva, ttc: Math.round((ht + tva) * 100) / 100 }; })();
+  const t = (function () { const ht = Math.round(d.lines.reduce((s, l) => s + (l.kind === "text" ? 0 : (Number(l.pu) || 0) * (Number(l.qt) || 0)), 0) * 100) / 100; const tva = d.intracom ? 0 : Math.round(ht * (Number(d.tva) || 0)) / 100; return { ht, tva, ttc: Math.round((ht + tva) * 100) / 100 }; })();
   const m = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; const neg = v < 0; const [i, dd] = Math.abs(v).toFixed(2).split("."); return (neg ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + "," + dd + " €"; };
   const q = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? String(v) : String(v).replace(".", ","); };
   const fd = (iso) => { if (!iso) return ""; const p = iso.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; };
@@ -1559,6 +1646,7 @@ function buildPdfDoc(d, company, logo, forWhom) {
   const infoRows = [[lab("REF CLIENT / REF SITE"), { text: d.reference || "", fontSize: 9 }]];
   if (d.refBTE) infoRows.push([lab("RÉFÉRENCE BTE"), { text: d.refBTE, fontSize: 9 }]);
   infoRows.push([lab("N° DE DEVIS"), { text: d.num || "", fontSize: 9 }]);
+  if (d.intracom && forWhom !== "client" && String(d.tvaIntra || "").trim()) infoRows.push([lab("N° TVA INTRACOM. DU DO"), { text: String(d.tvaIntra).trim(), fontSize: 9 }]);
   infoRows.push([lab("MODE DE RÈGLEMENT"), { text: d.mode || "", fontSize: 9, color: C.teal }]);
   infoRows.push([lab("VALIDITÉ DU DEVIS"), { text: fd(d.validite), fontSize: 9 }]);
   const th = (x, al) => ({ text: x, bold: true, color: C.teal, fontSize: 9, alignment: al || "center", margin: [0, 3, 0, 3] });
@@ -1601,6 +1689,7 @@ function buildPdfDoc(d, company, logo, forWhom) {
       { columns: [{ width: "*", text: "" }, { width: "auto", table: { widths: [86, 86, 86], body: [[th("TOTAL H.T."), th("MONTANT TVA"), th("NET À PAYER")], [
         { text: m(t.ht), alignment: "right", fontSize: 9 }, { text: m(t.tva), alignment: "right", fontSize: 9 }, { text: m(t.ttc), alignment: "right", fontSize: 9, bold: true }]] }, layout: grid }],
         margin: [0, 12, 0, 0], unbreakable: true },
+      d.intracom ? { text: String(company.mentionIntra || "").trim() || "Autoliquidation : TVA due par le preneur (article 196 de la directive 2006/112/CE).", bold: true, color: C.teal, fontSize: 8.5, alignment: "right", margin: [0, 6, 0, 0] } : { text: "" },
       { table: { widths: ["*"], body: [[{ text: cond || "", bold: true, color: C.teal, fontSize: 8, alignment: "center", lineHeight: 1.5, margin: [8, 6, 8, 6] }]] }, layout: grid, margin: [0, 14, 0, 0], unbreakable: true },
       { text: "Signature/Tampon précédé de la date et de la mention\n\"Bon pour accord\"", bold: true, color: C.teal, fontSize: 10, alignment: "center", margin: [0, 8, 0, 0] }
     ]
@@ -1680,7 +1769,7 @@ async function renderList() {
   const hist = Store.features.history;
   $("listWrap").innerHTML = `<table class="data"><thead><tr><th>N°</th><th>Modifié</th><th>DO</th><th>Client final</th><th>Réf. client / site</th><th class="r">Total HT</th><th>Statut</th><th class="r">Actions</th></tr></thead><tbody>` +
     rows.map((d) => `<tr class="click" data-id="${esc(d.id)}"><td class="mono">${esc(d.num)}</td><td class="num">${d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("fr-FR") : ""}${d.updatedBy ? `<div class="muted" style="font-size:12px">${esc(d.updatedBy)}</div>` : ""}</td><td>${esc(d.doName)}</td><td>${esc(d.client && d.client.name)}<div class="muted" style="font-size:12px">${esc(d.client && d.client.cpVille)}</div></td><td>${esc(d.reference)}</td><td class="r money">${money(totals(d).ht)}</td><td><span class="status-chip st-${esc(d.status || "brouillon")}">${esc(STATUS[d.status] || "Brouillon")}</span></td>
-    <td class="r" style="white-space:nowrap">${hist ? `<button class="btn sm" data-a="hist">Historique</button> ` : ""}<button class="btn sm" data-a="dup">Dupliquer</button> <button class="btn sm danger ${armedDel === d.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${armedDel === d.id ? "Confirmer" : "Supprimer"}</button></td></tr>`).join("") + `</tbody></table>`;
+    <td class="r" style="white-space:nowrap">${hist ? `<button class="btn sm" data-a="hist">Historique</button> ` : ""}<button class="btn sm" data-a="dup">Dupliquer</button> ${devisSupprimable(d) ? `<button class="btn sm danger ${armedDel === d.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${armedDel === d.id ? "Confirmer" : "Supprimer"}</button>` : `<button class="btn sm" data-a="nodel" aria-disabled="true" title="${esc(NODEL_DEVIS)}">Supprimer</button>`}</td></tr>`).join("") + `</tbody></table>`;
 }
 function bindList() {
   $("listSearch").addEventListener("input", () => renderList()); $("listStatus").addEventListener("change", () => renderList());
@@ -1690,10 +1779,12 @@ function bindList() {
     if (b.dataset.a === "hist") { const d = S.devis.find((x) => x.id === id) || trashRows.find((x) => x.id === id); openHistory(id, d); }
     if (b.dataset.a === "dup") duplicateDevis(S.devis.find((x) => x.id === id));
     if (b.dataset.a === "restore") { if (await Store.restoreDevis(id)) { toast("Devis restauré"); renderList(); } }
+    if (b.dataset.a === "nodel") { toast(NODEL_DEVIS); return; }
     if (b.dataset.a === "del") {
       if (armedDel !== id) { armedDel = id; renderList(); setTimeout(() => { if (armedDel === id) { armedDel = null; renderList(); } }, 4000); return; }
       armedDel = null; const d = S.devis.find((x) => x.id === id);
       if (await Store.deleteDevis(id)) { toast(`Devis ${d ? d.num : ""} supprimé${Store.features.trash ? " (récupérable dans la corbeille)" : ""}`); if (S.cur && S.cur.id === id) newDevis(); }
+      else renderList();
     }
   });
 }
@@ -1815,7 +1906,7 @@ function renderBpu() {
       <div class="bpu-top"><h3>${esc(g.name)}</h3><span class="muted">${g.items.length} prestations${missing ? ` · ${missing} sans prix` : ""}</span>
         <div class="actions"><button class="btn sm" data-a="view">${openGrid === g.id ? "Masquer" : "Voir les prestations"}</button>
         <button class="btn sm" data-a="copy" ${S.readOnly ? "disabled" : ""}>Dupliquer pour modifier</button>
-        ${isCustom ? `<button class="btn sm" data-a="edit" ${S.readOnly ? "disabled" : ""}>Modifier</button><button class="btn sm danger ${armedGrid === g.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${armedGrid === g.id ? "Confirmer" : "Supprimer"}</button>` : ""}</div></div>
+        ${isCustom ? `<button class="btn sm" data-a="edit" ${S.readOnly ? "disabled" : ""}>Modifier</button>${isAdmin() ? `<button class="btn sm danger ${armedGrid === g.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${armedGrid === g.id ? "Confirmer" : "Supprimer"}</button>` : ""}` : ""}</div></div>
       <div class="src-file">${isCustom ? "Créé dans ce CRM" : "Source : " + esc(g.source || "")}</div>
       ${always ? `<div class="note info">Affichée pour tous les devis, quel que soit le DO.</div>` : `<div class="assign"><span class="label">DO rattachés</span><div class="chips">${dos.length ? dos.map((c) => `<span class="chip"><span>${esc(doName(c))}</span><button type="button" data-unassign="${esc(c)}" aria-label="Détacher ${esc(doName(c))}" ${S.readOnly ? "disabled" : ""}>×</button></span>`).join("") : `<span class="muted" style="font-size:12px">Aucun : disponible via « Utiliser aussi le BPU de… »</span>`}</div>
         <input type="text" list="doList" placeholder="Rattacher un DO…" data-assign aria-label="Rattacher un DO à ce BPU" ${S.readOnly ? "disabled" : ""}></div>`}
@@ -1837,7 +1928,8 @@ function bindBpu() {
     if (b.dataset.a === "del") {
       if (armedGrid !== gid) { armedGrid = gid; renderBpu(); setTimeout(() => { if (armedGrid === gid) { armedGrid = null; renderBpu(); } }, 4000); return; }
       armedGrid = null; const m = JSON.parse(JSON.stringify(mapping())); Object.keys(m).forEach((c) => { m[c] = m[c].filter((x) => x !== gid); if (!m[c].length) delete m[c]; });
-      await Store.deleteGrid(gid); await setMapping(m); toast("BPU supprimé");
+      if (!(await Store.deleteGrid(gid))) { renderBpu(); return; }
+      await setMapping(m); toast("BPU supprimé");
     }
   });
   $("bpuList").addEventListener("change", async (e) => {
@@ -1881,7 +1973,7 @@ function startGridEditor(g, replaceOf) {
 }
 
 /* ---------------- company view ---------------- */
-const CF = { name: "c-name", addr1: "c-addr1", addr2: "c-addr2", foot1: "c-foot1", foot2: "c-foot2", condAcc: "c-condAcc", cond30: "c-cond30", mode: "c-mode", tva: "c-tva", prefix: "c-prefix" };
+const CF = { name: "c-name", addr1: "c-addr1", addr2: "c-addr2", foot1: "c-foot1", foot2: "c-foot2", condAcc: "c-condAcc", cond30: "c-cond30", mentionIntra: "c-mentionIntra", mode: "c-mode", tva: "c-tva", prefix: "c-prefix" };
 let pendingLogo = null;
 function renderCompany() {
   Object.entries(CF).forEach(([k, id]) => { if (document.activeElement !== $(id)) $(id).value = S.company[k] ?? ""; });
@@ -2102,7 +2194,7 @@ function renderSvProd() {
       <td><input class="w-s" data-pf="factureNum" value="${esc(p.factureNum || "")}" placeholder="${aFacturer(p) ? "à facturer" : "—"}">${p.factureDate && estFacture(p) ? `<div class="fact-date">le ${frDate(p.factureDate)}</div>` : ""}</td>
       <td><input class="w-l" data-pf="commentaire" value="${esc(p.commentaire || "")}" placeholder="—"></td>
       <td class="r">${mp === null ? "" : `<span class="${mp < 0 ? "neg" : ""}">${pct(mp)}</span>`}</td>
-      <td><button class="icon-btn ${armedProd === p.id ? "neg" : ""}" data-pdel="1" title="${armedProd === p.id ? "Cliquer encore pour supprimer" : "Supprimer l'intervention"}" aria-label="Supprimer l'intervention">${armedProd === p.id ? "Confirmer" : "✕"}</button></td></tr>`; }).join("") + `</tbody></table>`;
+      <td>${isAdmin() ? `<button class="icon-btn ${armedProd === p.id ? "neg" : ""}" data-pdel="1" title="${armedProd === p.id ? "Cliquer encore pour supprimer" : "Supprimer l'intervention"}" aria-label="Supprimer l'intervention">${armedProd === p.id ? "Confirmer" : "✕"}</button>` : ""}</td></tr>`; }).join("") + `</tbody></table>`;
 }
 let armedProd = null;
 async function svSaveProd(id, patch) {
@@ -2671,7 +2763,7 @@ async function renderBcList() {
     rows.map((b) => `<tr class="click" data-id="${esc(b.id)}" title="Ouvrir le bon de commande"><td class="mono">${String(b.num || "").trim() ? esc(b.num) : `<span class="muted">sans n°</span>`}</td><td class="num">${frDate(b.date)}${b.auteur ? `<div class="muted" style="font-size:12px">${esc(b.auteur)}</div>` : ""}</td><td>${esc(b.fournisseur && b.fournisseur.nom)}</td><td>${esc(b.affaire)}</td><td class="mono">${esc(b.refOffre)}</td>
       <td>${b.devisId && S.devis.some((d) => d.id === b.devisId) ? `<button class="linkish mono" data-a="devis">${esc(b.devisNum)}</button>` : esc(b.devisNum || "")}</td>
       <td class="r money">${money(bcTotals(b).ht)}</td><td><span class="status-chip st-${esc(b.status || "brouillon")}">${esc(BC_STATUS[b.status] || "Brouillon")}</span></td>
-      <td class="r" style="white-space:nowrap"><button class="btn sm primary" data-a="open">Modifier</button> <button class="btn sm" data-a="dup">Dupliquer</button> <button class="btn sm" data-a="hist">Versions</button> <button class="btn sm danger ${bcArmedDel === b.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${bcArmedDel === b.id ? "Confirmer" : "Supprimer"}</button></td></tr>`).join("") + `</tbody></table>`;
+      <td class="r" style="white-space:nowrap"><button class="btn sm primary" data-a="open">Modifier</button> <button class="btn sm" data-a="dup">Dupliquer</button> <button class="btn sm" data-a="hist">Versions</button> ${bcSupprimable(b) ? `<button class="btn sm danger ${bcArmedDel === b.id ? "armed" : ""}" data-a="del" ${S.readOnly ? "disabled" : ""}>${bcArmedDel === b.id ? "Confirmer" : "Supprimer"}</button>` : `<button class="btn sm" data-a="nodel" aria-disabled="true" title="${esc(NODEL_BC)}">Supprimer</button>`}</td></tr>`).join("") + `</tbody></table>`;
 }
 async function bcExportList() {
   const rows = bcListRows(); if (!rows.length) return;
@@ -2728,7 +2820,7 @@ function openFournForm(f) {
     <div class="grid2 tight">${fld("email", "E-mail", "email")}${fld("numClient", "Notre n° client chez eux")}</div>
     <label class="field"><span>Notes</span><textarea data-ff="notes" rows="2">${esc(x.notes || "")}</textarea></label>
     ${f ? `<p class="muted" style="margin:0;font-size:12px">${bcArticles(f.id).length} article(s) connu(s) : offres enregistrées et lignes des bons déjà passés.</p>` : ""}
-    <div class="row"><button class="btn primary" type="submit" ${S.readOnly ? "disabled" : ""}>Enregistrer</button>${f ? `<button class="btn danger ${bcArmedFourn === f.id ? "armed" : ""}" type="button" id="fournDel" ${S.readOnly ? "disabled" : ""}>${bcArmedFourn === f.id ? "Confirmer la suppression" : "Supprimer"}</button>` : ""}</div>
+    <div class="row"><button class="btn primary" type="submit" ${S.readOnly ? "disabled" : ""}>Enregistrer</button>${f && isAdmin() ? `<button class="btn danger ${bcArmedFourn === f.id ? "armed" : ""}" type="button" id="fournDel" ${S.readOnly ? "disabled" : ""}>${bcArmedFourn === f.id ? "Confirmer la suppression" : "Supprimer"}</button>` : ""}</div>
   </form>`);
   const form = $("fournForm"); form.querySelector("[data-ff=nom]").focus();
   form.addEventListener("submit", async (e) => {
@@ -2815,9 +2907,11 @@ function bindAchats() {
     if (a.dataset.a === "hist") openBcHistory(id, b);
     if (a.dataset.a === "dup") bcDuplicate(b);
     if (a.dataset.a === "restore") { if (await Store.restoreBc(id)) { toast(`Bon ${bcLabel(b)} restauré`); renderBcList(); } }
+    if (a.dataset.a === "nodel") { toast(NODEL_BC); return; }
     if (a.dataset.a === "del") {
       if (bcArmedDel !== id) { bcArmedDel = id; renderBcList(); setTimeout(() => { if (bcArmedDel === id) { bcArmedDel = null; renderBcList(); } }, 4000); return; }
       bcArmedDel = null; if (await Store.deleteBc(id)) { toast(`Bon ${bcLabel(b)} supprimé (récupérable dans la corbeille)`); if (BC.cur && BC.cur.id === id) { BC.cur = blankBc(); BC.dirty = false; loadBcForm(); } }
+      else renderBcList();
     }
   });
   // versions
@@ -3553,6 +3647,7 @@ function bindLectureBc() {
 
 /* ---------------- views ---------------- */
 function showView(v) {
+  if (v === "societe" && !isAdmin()) v = "devis"; // onglet Société : administrateur seulement
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.view === v));
   ["devis", "liste", "suivi", "achats", "histo", "bpu", "societe"].forEach((x) => { $("view-" + x).hidden = x !== v; });
   if (v === "liste") renderList(); if (v === "bpu") renderBpu(); if (v === "societe") renderCompany(); if (v === "histo") renderJournal(); if (v === "suivi") renderSuivi(); if (v === "achats") renderAchats();
@@ -3612,30 +3707,65 @@ async function boot() {
     await startIdleGuard();
     if (!(await Store.hasSession())) { showGate(idleMsg()); return; }
     if (!Store.author) { showGate(idleMsg()); return; }
+    if (!(await resolveRole())) return;
   }
   await startData();
 }
 
+/* Rôle du compte connecté, lu dans la base. Sans rôle : pas d'accès. */
+async function resolveRole() {
+  const { role, error } = await Store.loadRole();
+  if (role) { S.role = role; applyRole(); return true; }
+  const email = await Store.sessionEmail();
+  if (error && error.code === "PGRST202" && email === Store.teamEmail) {
+    // la base n'a pas encore reçu le script des droits : l'équipe garde l'accès, sans l'onglet Société
+    S.role = "user"; applyRole();
+    const b = $("banner"); b.hidden = false; b.className = "banner note"; b.textContent = "Mise à jour de la base à faire (script des droits) : l'accès administrateur n'est pas encore disponible.";
+    return true;
+  }
+  await Store.signOut();
+  showGate(error ? (error.code === "PGRST202" ? "La base n'est pas encore à jour : lancez d'abord le script SQL des droits dans Supabase." : "Impossible de vérifier vos droits : " + (error.message || "erreur réseau") + ". Réessayez.") : "Ce compte n'a pas accès au CRM.");
+  return false;
+}
+
+let gateAdmin = !!lsGet("crm:gateAdmin", false);
+function renderGateMode() {
+  $("g-emailBox").hidden = !gateAdmin; $("g-email").required = gateAdmin;
+  if (gateAdmin && !$("g-email").value) $("g-email").value = lsGet("crm:adminEmail", "");
+  $("g-codeLabel").textContent = gateAdmin ? "Mot de passe administrateur" : "Code d'accès";
+  $("gateSwitch").textContent = gateAdmin ? "Connexion équipe (code d'accès)" : "Connexion administrateur";
+}
 function showGate(msg) {
   $("gateLogo").src = DEFAULT_LOGO;
   $("gate").hidden = false; $("g-name").value = (Store.author || lsGet("crm:author", "")) || "";
+  renderGateMode();
   const err = $("gateErr"); err.hidden = !msg; err.textContent = msg || "";
-  ($("g-name").value ? $("g-code") : $("g-name")).focus();
+  (!$("g-name").value ? $("g-name") : gateAdmin && !$("g-email").value ? $("g-email") : $("g-code")).focus();
 }
 let dataStarted = false;
 function bindGate() {
+  $("gateSwitch").addEventListener("click", () => {
+    gateAdmin = !gateAdmin; lsSet("crm:gateAdmin", gateAdmin); $("g-code").value = ""; $("gateErr").hidden = true;
+    renderGateMode(); (gateAdmin && !$("g-email").value ? $("g-email") : $("g-code")).focus();
+  });
   $("gateForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("g-name").value.trim(); const code = $("g-code").value;
-    if (!name || !code) return;
+    const email = gateAdmin ? $("g-email").value.trim().toLowerCase() : Store.teamEmail;
+    if (!name || !code || !email) return;
     $("gateBtn").disabled = true; $("gateBtn").textContent = "Vérification…";
-    const err = (await Store.hasSession()) ? null : await Store.signIn(code);
+    const same = (await Store.hasSession()) && (await Store.sessionEmail()) === email;
+    const err = same ? null : await Store.signIn(code, email);
     $("gateBtn").disabled = false; $("gateBtn").textContent = "Entrer"; $("g-code").value = "";
     if (err) {
-      const m = /invalid/i.test(err.message || "") ? "Code d'accès incorrect." : /rate|many/i.test(err.message || "") ? "Trop de tentatives. Patientez quelques minutes." : "Connexion impossible : " + (err.message || "erreur réseau");
+      const m = /invalid/i.test(err.message || "") ? (gateAdmin ? "Adresse ou mot de passe incorrect." : "Code d'accès incorrect.") : /rate|many/i.test(err.message || "") ? "Trop de tentatives. Patientez quelques minutes." : "Connexion impossible : " + (err.message || "erreur réseau");
       $("gateErr").hidden = false; $("gateErr").textContent = m; $("g-code").focus(); return;
     }
+    if (gateAdmin) lsSet("crm:adminEmail", email);
+    const before = S.role;
+    if (!(await resolveRole())) return;
     Store.setAuthor(name); lsSet(IDLE_KEY, Date.now()); $("gate").hidden = true; updateWho();
+    if (dataStarted && before && before !== S.role) { location.reload(); return; } // autre compte : on repart de zéro
     if (!dataStarted) await startData();
   });
   $("btnLogout").addEventListener("click", async () => { await Store.signOut(); location.hash = ""; location.reload(); });
@@ -3654,7 +3784,7 @@ async function startData() {
   S.cur = blankDevis(); loadIntoForm(); afterCatalog();
   if (Store.features.suivi) $("tabSuivi").hidden = false;
   if (Store.features.history) { $("tabHisto").hidden = false; $("listStatus").insertAdjacentHTML("beforeend", `<option value="__trash">Corbeille</option>`); }
-  updateWho();
+  updateWho(); applyRole();
   if (Store.features.achats && Store.onBcs) startAchats();
   const hash = (location.hash || "").slice(1); if (["liste", "bpu", "societe", "histo", "suivi", "achats"].includes(hash)) showView(hash);
 
