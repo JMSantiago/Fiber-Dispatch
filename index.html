@@ -679,7 +679,10 @@ table.data td.eq-in select { min-width: 150px; width: 100%; }
                   <label class="field"><span>N° de commande</span><input type="text" id="b-num" placeholder="Votre n° de commande" autocomplete="off"><small class="muted" id="b-numHint" style="font-size:12px"></small></label>
                   <label class="field"><span>Date de commande</span><input type="date" id="b-date"></label>
                 </div>
-                <label class="field"><span>N° devis fournisseur</span><input type="text" id="b-refOffre" placeholder="ex. DV46032450"></label>
+                <div class="grid2 tight">
+                  <label class="field"><span>N° devis fournisseur</span><input type="text" id="b-refOffre" placeholder="ex. DV46032450"></label>
+                  <label class="field"><span>Commandé par</span><input type="text" id="b-auteur" placeholder="Nom ou initiales" autocomplete="off" title="Nom ou initiales imprimés sur le bon (ex. JMS). Retenu pour vos bons suivants."></label>
+                </div>
                 <label class="field"><span>Affaire / chantier</span><input type="text" id="b-affaire" placeholder="ex. UNIVI FAIENCERIE"></label>
                 <label class="field"><span>Devis DO lié <small class="muted">(facultatif)</small></span><input type="text" id="b-devis" list="bcDevisList" placeholder="N° de devis ou nom du client" autocomplete="off"></label>
                 <label class="field"><span>Livraison</span><select id="b-livMode"><option value="societe">Livraison à notre adresse</option><option value="chantier">Livraison sur le chantier</option><option value="retrait">Livraison sur point de retrait</option><option value="domicile">Livraison au domicile</option><option value="autre">Livraison sur adresse de son choix</option></select></label>
@@ -2634,15 +2637,25 @@ function renderBcNumHint() {
 const BF = { // champ → chemin dans le bon de commande
   "b-agence": ["fournisseur", "agence"], "b-adresse": ["fournisseur", "adresse"], "b-cpVille": ["fournisseur", "cpVille"], "b-contact": ["fournisseur", "contact"],
   "b-tel": ["fournisseur", "tel"], "b-email": ["fournisseur", "email"], "b-numClient": ["fournisseur", "numClient"],
-  "b-num": ["num"], "b-date": ["date"], "b-refOffre": ["refOffre"], "b-affaire": ["affaire"], "b-dateLiv": ["dateLivraison"], "b-notes": ["notes"],
+  "b-num": ["num"], "b-date": ["date"], "b-refOffre": ["refOffre"], "b-affaire": ["affaire"], "b-dateLiv": ["dateLivraison"], "b-notes": ["notes"], "b-auteur": ["auteur"],
   "b-livNom": ["livraison", "nom"], "b-livAdresse": ["livraison", "adresse"], "b-livCpVille": ["livraison", "cpVille"], "b-livContact": ["livraison", "contact"]
 };
 const bcGet = (path) => path.reduce((o, k) => (o ? o[k] : ""), BC.cur);
 const bcSet = (path, v) => { const o = path.length > 1 ? BC.cur[path[0]] : BC.cur; o[path[path.length - 1]] = v; };
 const devisLabel = (d) => `${d.num} · ${d.doName || "?"} → ${(d.client && d.client.name) || ""}`.trim();
 
+/* « Commandé par » : chacun choisit son nom ou ses initiales (ex. JMS) ; retenu pour ses bons suivants,
+   pour toute l'équipe et sur tous les postes (réglages achats → signatures) */
+const bcSigKey = () => (isPersonal() ? S.me.email : "equipe:" + norm(Store.author || ""));
+const bcAuteurDefaut = () => String((BC.cfg.signatures || {})[bcSigKey()] || Store.author || "").trim();
+async function bcRememberAuteur(v) {
+  v = String(v || "").trim(); const sig = BC.cfg.signatures || {};
+  if (!v || S.readOnly || sig[bcSigKey()] === v) return;
+  BC.cfg = { ...BC.cfg, signatures: { ...sig, [bcSigKey()]: v } }; await Store.saveConfig("achats", BC.cfg);
+}
 function loadBcForm() {
   const b = BC.cur;
+  $("b-auteur").placeholder = bcAuteurDefaut() || "Nom ou initiales";
   $("b-fourn").value = b.fournisseur.nom || "";
   Object.entries(BF).forEach(([id, path]) => { $(id).value = bcGet(path) || ""; });
   $("b-status").value = b.status || "brouillon"; $("b-tva").value = b.tva; $("b-livMode").value = b.livraison.mode || "societe";
@@ -2778,7 +2791,7 @@ async function bcSave(silent) {
   const b = BC.cur;
   if (!b.fournisseur.nom.trim()) { if (!silent) { toast("Choisissez ou saisissez un fournisseur"); $("b-fourn").focus(); } return false; }
   if (!b.id) { b.id = uid(); b.createdAt = Date.now(); }
-  b.num = String(b.num || "").trim(); b.updatedAt = Date.now(); b.auteur = b.auteur || Store.author || "";
+  b.num = String(b.num || "").trim(); b.updatedAt = Date.now(); b.auteur = String(b.auteur || "").trim() || bcAuteurDefaut(); $("b-auteur").value = b.auteur;
   const known = fournById(b.fournisseurId) || fournByName(b.fournisseur.nom);
   b.fournisseurId = known ? known.id : fournSlug(b.fournisseur.nom);
   const data = JSON.parse(JSON.stringify(b)); delete data.updatedBy;
@@ -3027,6 +3040,7 @@ function bindAchats() {
   $("bcUnites").innerHTML = BC_UNITES.map((u) => `<option value="${u}"></option>`).join("");
   document.querySelectorAll("[data-ac]").forEach((b) => b.addEventListener("click", () => achatsGo(b.dataset.ac)));
   Object.entries(BF).forEach(([id, path]) => $(id).addEventListener("input", (e) => { bcSet(path, e.target.value); bcMarkDirty(); if (id === "b-agence" || id === "b-adresse") renderBcCatalog(); }));
+  $("b-auteur").addEventListener("change", (e) => bcRememberAuteur(e.target.value));
   $("b-num").addEventListener("blur", (e) => { const v = e.target.value.trim(); if (v !== e.target.value) { e.target.value = v; BC.cur.num = v; renderBcHead(); } });
   $("b-fourn").addEventListener("change", (e) => bcChooseFourn(e.target.value));
   $("b-devis").addEventListener("change", (e) => bcChooseDevis(e.target.value));
@@ -4050,7 +4064,7 @@ async function startData() {
     if (cfg.mapping && cfg.mapping.map) S.mapping = cfg.mapping.map;
     if (cfg.doaddr && cfg.doaddr.map) S.doAddr = cfg.doaddr.map;
     if (cfg.suivi) suiviCfg = cfg.suivi;
-    if (cfg.achats) BC.cfg = cfg.achats;
+    if (cfg.achats) { BC.cfg = cfg.achats; $("b-auteur").placeholder = bcAuteurDefaut() || "Nom ou initiales"; }
     renderCompany(); if (!$("view-bpu").hidden) renderBpu(); renderCatalog();
   });
   Store.onGrids((list) => { S.custom = {}; list.forEach((g) => { if (g && g.id && Array.isArray(g.items)) S.custom[g.id] = g; }); renderCatalog(); if (!$("view-bpu").hidden) renderBpu(); });
